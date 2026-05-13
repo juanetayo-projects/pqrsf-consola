@@ -244,6 +244,34 @@ function buildCharts(recs) {
   buildChartEstado(recs);
 }
 
+/* ── Chart defaults – Odoo compact style ───────────────────── */
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: true,
+  animation: { duration: 400 },
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      backgroundColor: 'rgba(13,45,107,.85)',
+      titleFont: { size: 11 }, bodyFont: { size: 11 },
+      padding: 8, cornerRadius: 6,
+    },
+  },
+  scales: {
+    x: {
+      grid: { display: false },
+      ticks: { font: { size: 10 }, color: '#9ca3af', maxRotation: 30 },
+      border: { display: false },
+    },
+    y: {
+      grid: { color: '#f3f4f6' },
+      ticks: { font: { size: 10 }, color: '#9ca3af', stepSize: 1 },
+      border: { display: false },
+      beginAtZero: true,
+    },
+  },
+};
+
 function buildChartTipo(recs) {
   const counts = {};
   recs.forEach(r => { if (r.tipo_reporte) counts[r.tipo_reporte] = (counts[r.tipo_reporte]||0)+1; });
@@ -254,8 +282,24 @@ function buildChartTipo(recs) {
   const ctx = document.getElementById('chartTipo').getContext('2d');
   chartTipo = new Chart(ctx, {
     type: 'doughnut',
-    data: { labels, datasets:[{ data, backgroundColor: colors, borderWidth:2, borderColor:'#fff' }]},
-    options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:11} } } } }
+    data: { labels, datasets:[{ data, backgroundColor: colors, borderWidth: 2, borderColor:'#fff', hoverOffset: 4 }]},
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      animation: { duration: 400 },
+      cutout: '68%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font:{ size:10 }, padding: 8, boxWidth: 10, color:'#6b7280' }
+        },
+        tooltip: {
+          backgroundColor:'rgba(13,45,107,.85)',
+          titleFont:{size:11}, bodyFont:{size:11},
+          padding:8, cornerRadius:6,
+        },
+      },
+    }
   });
 }
 
@@ -267,51 +311,66 @@ function buildChartMes(recs) {
     const key = d.substring(0, 7);
     byMonth[key] = (byMonth[key]||0)+1;
   });
-  const sorted = Object.keys(byMonth).sort().slice(-8);
+  const sorted = Object.keys(byMonth).sort().slice(-6);
   const labels = sorted.map(k => {
     const [y,m] = k.split('-');
-    return new Date(+y,+m-1,1).toLocaleDateString('es-CO',{month:'short',year:'2-digit'});
+    return new Date(+y,+m-1,1).toLocaleDateString('es-CO',{month:'short'});
   });
   const data = sorted.map(k => byMonth[k]);
   if (chartMes) chartMes.destroy();
   const ctx = document.getElementById('chartMes').getContext('2d');
   chartMes = new Chart(ctx, {
-    type: 'bar',
+    type: 'line',
     data: {
       labels,
-      datasets:[{ label:'PQRSF', data, backgroundColor:'rgba(36,113,200,.7)', borderColor:'#2471c8', borderWidth:1, borderRadius:5 }]
+      datasets:[{
+        label:'PQRSF', data,
+        borderColor:'#2471c8', borderWidth: 2,
+        backgroundColor:'rgba(36,113,200,.08)',
+        fill: true, tension: 0.4,
+        pointBackgroundColor:'#2471c8',
+        pointRadius: 3, pointHoverRadius: 5,
+      }]
     },
-    options:{ responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{stepSize:1}}} }
+    options: { ...CHART_DEFAULTS }
   });
 }
 
 function buildChartSede(recs) {
   const counts = {};
   recs.forEach(r => { if (r.sede) counts[r.sede] = (counts[r.sede]||0)+1; });
-  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  const labels = sorted.map(e=>e[0]);
+  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const labels = sorted.map(e => e[0].length > 12 ? e[0].substring(0,12)+'…' : e[0]);
   const data   = sorted.map(e=>e[1]);
   if (chartSede) chartSede.destroy();
   const ctx = document.getElementById('chartSede').getContext('2d');
   chartSede = new Chart(ctx, {
     type: 'bar',
-    data: { labels, datasets:[{ label:'Cantidad', data, backgroundColor:'rgba(22,163,74,.7)', borderColor:'#16a34a', borderWidth:1, borderRadius:5 }]},
-    options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true, ticks:{stepSize:1}}} }
+    data: { labels, datasets:[{
+      label:'Cantidad', data,
+      backgroundColor:'rgba(22,163,74,.75)',
+      borderRadius: 4, borderSkipped: false,
+    }]},
+    options: { ...CHART_DEFAULTS }
   });
 }
 
 function buildChartEstado(recs) {
-  const orden = STAGES;
+  const orden  = STAGES;
   const counts = {};
   orden.forEach(s => { counts[s] = 0; });
   recs.forEach(r => { if (r.estado && counts[r.estado] !== undefined) counts[r.estado]++; });
-  const colors = ['#3b82f6','#f97316','#22c55e','#6b7280'];
+  const colors = ['#60a5fa','#fb923c','#4ade80','#d1d5db'];
   if (chartEstado) chartEstado.destroy();
   const ctx = document.getElementById('chartEstado').getContext('2d');
   chartEstado = new Chart(ctx, {
     type: 'bar',
-    data: { labels: orden, datasets:[{ label:'Cantidad', data: orden.map(s=>counts[s]), backgroundColor:colors, borderWidth:0, borderRadius:6 }]},
-    options:{ responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{stepSize:1}}} }
+    data: { labels: orden, datasets:[{
+      label:'Cantidad', data: orden.map(s=>counts[s]),
+      backgroundColor: colors,
+      borderRadius: 4, borderSkipped: false,
+    }]},
+    options: { ...CHART_DEFAULTS }
   });
 }
 
