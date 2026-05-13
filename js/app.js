@@ -761,37 +761,22 @@ function generatePDFById(id) {
   doc.setFillColor(13,45,107);
   doc.rect(0, 0, W, 38, 'F');
 
-  // Logo (si está disponible)
-  if (logoBase64) {
-    try {
-      // Calcular dimensiones proporcionales (alto máx 28mm)
-      const tmpImg = new Image();
-      tmpImg.src = logoBase64;
-      const ratio  = tmpImg.width  / tmpImg.height;
-      const logoH  = 26;
-      const logoW  = Math.min(logoH * ratio, 45); // máx 45mm de ancho
-      doc.addImage(logoBase64, 'PNG', ml, (38 - logoH) / 2, logoW, logoH);
-      // Texto a la derecha del logo
-      const tx = ml + logoW + 6;
-      doc.setTextColor(255,255,255);
-      doc.setFontSize(13); doc.setFont('helvetica','bold');
-      doc.text('Clínica de Alta Complejidad Santa Bárbara', tx, 14);
-      doc.setFontSize(9); doc.setFont('helvetica','normal');
-      doc.text('SIAU – Sistema PQRSF', tx, 21);
-      doc.setFontSize(8);
-      doc.text('Peticiones · Quejas · Reclamos · Sugerencias · Felicitaciones', tx, 28);
-    } catch(e) {
-      // Fallback sin logo
-      doc.setTextColor(255,255,255);
-      doc.setFontSize(14); doc.setFont('helvetica','bold');
-      doc.text('Clínica de Alta Complejidad Santa Bárbara', W/2, 14, {align:'center'});
-      doc.setFontSize(10); doc.setFont('helvetica','normal');
-      doc.text('SIAU – Sistema PQRSF', W/2, 21, {align:'center'});
-      doc.setFontSize(9);
-      doc.text('Peticiones · Quejas · Reclamos · Sugerencias · Felicitaciones', W/2, 29, {align:'center'});
-    }
-  } else {
-    // Sin logo: texto centrado
+  // Logo incrustado — dimensiones fijas (logo.png: 575×677 px → ratio ≈ 0.85)
+  // No se usa new Image() porque es asíncrono y width/height serían 0
+  const logoH = 28;          // alto en mm
+  const logoW = logoH * (575 / 677); // ≈ 23.8 mm — proporcional al PNG real
+  try {
+    doc.addImage(logoBase64, 'PNG', ml, (38 - logoH) / 2, logoW, logoH);
+    const tx = ml + logoW + 5;
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+    doc.text('Clínica de Alta Complejidad Santa Bárbara', tx, 13);
+    doc.setFontSize(9);  doc.setFont('helvetica', 'normal');
+    doc.text('SIAU – Sistema PQRSF', tx, 21);
+    doc.setFontSize(8);
+    doc.text('Peticiones · Quejas · Reclamos · Sugerencias · Felicitaciones', tx, 29);
+  } catch (e) {
+    // Fallback texto centrado si addImage falla
     doc.setTextColor(255,255,255);
     doc.setFontSize(14); doc.setFont('helvetica','bold');
     doc.text('Clínica de Alta Complejidad Santa Bárbara', W/2, 14, {align:'center'});
