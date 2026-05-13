@@ -13,22 +13,36 @@ let sortDir      = 'desc';
 let chartTipo, chartMes, chartSede, chartEstado;
 let logoBase64   = null; // logo precargado para PDF
 
-/* ── Precargar logo para PDF (fetch → base64, sin CORS) ─────── */
+/* ── Precargar logo para PDF (fetch → base64) ───────────────── */
 async function preloadLogo() {
-  try {
-    const res  = await fetch('assets/logo.png');
-    if (!res.ok) throw new Error('not found');
-    const blob = await res.blob();
-    logoBase64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror  = reject;
-      reader.readAsDataURL(blob);
-    });
-  } catch (e) {
-    console.warn('Logo no cargado para PDF:', e.message);
-    logoBase64 = null;
+  // Intentar múltiples fuentes en orden
+  const urls = [
+    'assets/logo.png',
+    'https://juanetayo-projects.github.io/consolarondas/logo.png',
+    'https://raw.githubusercontent.com/juanetayo-projects/consolarondas/master/logo.png',
+  ];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { cache: 'force-cache' });
+      if (!res.ok) continue;
+      const blob = await res.blob();
+      const b64  = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror  = reject;
+        reader.readAsDataURL(blob);
+      });
+      if (b64 && b64.length > 100) {
+        logoBase64 = b64;
+        console.log('Logo cargado desde:', url);
+        return;
+      }
+    } catch (e) {
+      continue;
+    }
   }
+  console.warn('Logo no disponible para PDF');
+  logoBase64 = null;
 }
 
 const STAGES    = ['Recibida', 'En gestión', 'Respondida', 'Cerrada'];
