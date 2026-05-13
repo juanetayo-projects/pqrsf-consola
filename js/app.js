@@ -953,29 +953,27 @@ function generatePDFById(id) {
   // ── Logo header ───────────────────────────────────────────────
   // logoJpeg = base64 JPEG puro convertido desde el PNG al cargar la app.
   // jsPDF maneja JPEG de forma nativa y sin parser especial → siempre funciona.
-  // Dimensiones del logo: respetar proporciones reales de la imagen cargada
-  const logoH = 28;
+  // Dimensiones del logo — respetar proporciones reales de la imagen cargada
+  // logoH = altura en mm; ancho calculado automáticamente según ratio real
+  const logoH = 22;
   const ratio = (logoNaturalW > 0 && logoNaturalH > 0)
     ? (logoNaturalW / logoNaturalH)
-    : 1;                          // cuadrado si no se pudo medir
+    : 1;
   const logoW = logoH * ratio;
+  const logoY = (38 - logoH) / 2;          // centrado vertical en cabecera 38 mm
 
-  console.log('▶ PDF: logoJpeg =', logoJpeg ? logoJpeg.length + ' chars' : 'NULL');
   if (logoJpeg) {
     try {
-      doc.addImage(logoJpeg, 'JPEG', ml, (38 - logoH) / 2, logoW, logoH);
-      console.log('▶ addImage OK');
-    } catch(e) {
-      console.error('▶ addImage ERROR:', e);
-    }
-    const tx = ml + logoW + 5;
+      doc.addImage(logoJpeg, 'JPEG', ml, logoY, logoW, logoH);
+    } catch(e) { console.error('addImage ERROR:', e); }
+    const tx = ml + logoW + 4;
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-    doc.text('Clínica de Alta Complejidad Santa Bárbara', tx, 13);
+    doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+    doc.text('Clínica de Alta Complejidad Santa Bárbara', tx, 14);
     doc.setFontSize(9);  doc.setFont('helvetica', 'normal');
     doc.text('SIAU – Sistema PQRSF', tx, 21);
     doc.setFontSize(8);
-    doc.text('Peticiones · Quejas · Reclamos · Sugerencias · Felicitaciones', tx, 29);
+    doc.text('Peticiones · Quejas · Reclamos · Sugerencias · Felicitaciones', tx, 28);
   } else {
     // Fallback: texto centrado (si canvas no estuvo disponible)
     doc.setTextColor(255, 255, 255);
@@ -1162,15 +1160,14 @@ function loadAdminSection() {
 
 function showAdminTab(tab) {
   adminCurrentTab = tab;
-  // Actualizar clases de pestañas
   document.querySelectorAll('.admin-tab').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('atab-' + tab);
   if (btn) btn.classList.add('active');
 
   switch(tab) {
-    case 'perfiles':       loadAdminPerfiles();       break;
-    case 'especialidades': loadAdminEspecialidades();  break;
-    case 'resumen':        loadAdminResumen();         break;
+    case 'perfiles': loadAdminPerfiles();  break;
+    case 'maestras': loadAdminMaestras();  break;
+    case 'resumen':  loadAdminResumen();   break;
   }
 }
 
@@ -1315,155 +1312,191 @@ async function adminSavePerfil() {
   loadAdminPerfiles();
 }
 
-/* ── Especialidades ───────────────────────────────────────── */
-async function loadAdminEspecialidades() {
-  const panel = document.getElementById('adminContent');
-  panel.innerHTML = '<div class="admin-empty"><i class="fa-solid fa-spinner fa-spin"></i> Cargando especialidades…</div>';
+/* ── Tablas Maestras — CRUD genérico ─────────────────────── */
+// Todas las tablas de listas/lookup del proyecto
+const MAESTRAS_CONFIG = [
+  { tabla:'especialidades',      label:'Especialidades',         hasActivo:true  },
+  { tabla:'lista_convenios',     label:'Convenios / EPS',        hasActivo:false },
+  { tabla:'lista_entidades',     label:'Entidades',              hasActivo:false },
+  { tabla:'lista_fallas',        label:'Fallas / Atributos',     hasActivo:false },
+  { tabla:'lista_fuentes',       label:'Fuentes',                hasActivo:false },
+  { tabla:'lista_procesos',      label:'Procesos / Servicios',   hasActivo:false },
+  { tabla:'lista_regimen',       label:'Régimen',                hasActivo:false },
+  { tabla:'lista_sedes',         label:'Sedes',                  hasActivo:false },
+  { tabla:'lista_tipo_reporte',  label:'Tipo de reporte',        hasActivo:false },
+  { tabla:'lista_tipo_usuario',  label:'Tipo de usuario',        hasActivo:false },
+];
 
-  // Intentar cargar la tabla (puede que no exista aún)
+let maestraCurrentCfg = null;
+
+function loadAdminMaestras() {
+  const panel = document.getElementById('adminContent');
+  const btnHtml = MAESTRAS_CONFIG.map(cfg => {
+    const active = maestraCurrentCfg?.tabla === cfg.tabla ? ' active' : '';
+    return `<button class="maestra-btn${active}" onclick="showMaestraTable('${cfg.tabla}')">${cfg.label}</button>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="maestras-nav">${btnHtml}</div>
+    <div id="maestraContent">
+      <div class="admin-empty" style="padding:40px">
+        <i class="fa-solid fa-hand-pointer" style="font-size:24px;margin-bottom:10px;display:block"></i>
+        Seleccione una tabla para gestionar sus datos.
+      </div>
+    </div>`;
+
+  // Restaurar tabla abierta si venía de otra pestaña
+  if (maestraCurrentCfg) showMaestraTable(maestraCurrentCfg.tabla);
+}
+
+async function showMaestraTable(tablaKey) {
+  maestraCurrentCfg = MAESTRAS_CONFIG.find(c => c.tabla === tablaKey);
+  if (!maestraCurrentCfg) return;
+
+  const { tabla, label, hasActivo } = maestraCurrentCfg;
+
+  // Actualizar botón activo
+  document.querySelectorAll('.maestra-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim() === label);
+  });
+
+  const content = document.getElementById('maestraContent');
+  if (!content) { loadAdminMaestras(); return; }
+  content.innerHTML = '<div class="admin-empty"><i class="fa-solid fa-spinner fa-spin"></i> Cargando…</div>';
+
   const { data, error } = await db
-    .from('especialidades')
-    .select('*')
-    .order('nombre', { ascending: true });
+    .from(tabla).select('*').order('nombre', { ascending: true });
 
   if (error) {
-    // Tabla no existe o error de permisos
-    panel.innerHTML = `
-      <div class="admin-panel-header">
-        <span style="font-size:14px;font-weight:700;color:#0d2d6b"><i class="fa-solid fa-stethoscope" style="margin-right:6px"></i>Especialidades</span>
-      </div>
-      <div style="background:#fef9c3;border-radius:8px;padding:16px 20px;font-size:13px;color:#78350f;line-height:1.7;margin-bottom:16px">
-        <b><i class="fa-solid fa-triangle-exclamation"></i> La tabla <code>especialidades</code> no existe aún.</b><br>
-        Ejecute el siguiente SQL en Supabase → SQL Editor para crearla y poblarla:<br><br>
-        <textarea style="width:100%;height:120px;font-family:monospace;font-size:11px;border-radius:6px;padding:8px;border:1px solid #e5e7eb;resize:vertical" readonly>${getEspecialidadesSQL()}</textarea>
-        <button class="btn-primary-sm" style="margin-top:8px" onclick="copiarSQL()"><i class="fa-solid fa-copy"></i> Copiar SQL</button>
+    // Tabla no existe → mostrar SQL para crearla
+    const sql = getMaestraSQL(tabla, label, hasActivo);
+    content.innerHTML = `
+      <div style="background:#fef9c3;border-radius:8px;padding:16px 20px;font-size:13px;color:#78350f;line-height:1.7;margin-top:4px">
+        <b><i class="fa-solid fa-triangle-exclamation"></i> La tabla <code>${tabla}</code> no existe aún.</b><br>
+        Ejecute en Supabase → SQL Editor y luego recargue:<br><br>
+        <textarea id="sqlBox-${tabla}" style="width:100%;height:90px;font-family:monospace;font-size:11px;border-radius:6px;padding:8px;border:1px solid #e5e7eb;resize:vertical" readonly>${sql}</textarea><br>
+        <button class="btn-primary-sm" style="margin-top:8px"
+          onclick="navigator.clipboard.writeText(document.getElementById('sqlBox-${tabla}').value).then(()=>alert('SQL copiado.'))">
+          <i class="fa-solid fa-copy"></i> Copiar SQL
+        </button>
       </div>`;
     return;
   }
 
-  const rows = (data ?? []).map(e => `
-    <tr>
-      <td style="font-weight:700;color:#0d2d6b">${e.id}</td>
-      <td>${esc(e.nombre)}</td>
-      <td><span class="badge-${e.activo !== false ? 'activo' : 'inactivo'}">${e.activo !== false ? 'Activo' : 'Inactivo'}</span></td>
-      <td>
-        <div class="table-actions">
-          <button class="btn-tbl view" onclick="adminEditEsp(${e.id},'${esc(e.nombre)}',${e.activo !== false})" title="Editar"><i class="fa-solid fa-pen"></i></button>
-          <button class="btn-tbl del"  onclick="adminDeleteEsp(${e.id},'${esc(e.nombre)}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
-        </div>
-      </td>
-    </tr>`).join('');
+  const thExtra   = hasActivo ? '<th>Estado</th>' : '';
+  const rows = (data ?? []).map(r => {
+    const tdExtra = hasActivo
+      ? `<td><span class="badge-${r.activo !== false ? 'activo' : 'inactivo'}">${r.activo !== false ? 'Activo' : 'Inactivo'}</span></td>`
+      : '';
+    const activoStr = hasActivo ? `,${r.activo !== false}` : '';
+    return `<tr>
+      <td style="font-weight:700;color:#0d2d6b;font-size:12px">${r.id}</td>
+      <td>${esc(r.nombre ?? '')}</td>
+      ${tdExtra}
+      <td><div class="table-actions">
+        <button class="btn-tbl view" onclick="maestraEdit('${tabla}',${r.id},'${esc(r.nombre ?? '')}',${hasActivo}${activoStr})" title="Editar"><i class="fa-solid fa-pen"></i></button>
+        <button class="btn-tbl del"  onclick="maestraDelete('${tabla}',${r.id},'${esc(r.nombre ?? '')}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+      </div></td>
+    </tr>`;
+  }).join('');
 
-  panel.innerHTML = `
-    <div class="admin-panel-header">
-      <span style="font-size:14px;font-weight:700;color:#0d2d6b"><i class="fa-solid fa-stethoscope" style="margin-right:6px"></i>Especialidades (${data.length})</span>
-      <button class="btn-primary-sm" onclick="adminNewEsp()"><i class="fa-solid fa-plus"></i> Nueva especialidad</button>
+  content.innerHTML = `
+    <div class="admin-panel-header" style="margin-top:4px">
+      <span style="font-size:14px;font-weight:700;color:#0d2d6b">${label} <span style="color:#6b7280;font-weight:400">(${data.length})</span></span>
+      <button class="btn-primary-sm" onclick="maestraNew('${tabla}',${hasActivo})"><i class="fa-solid fa-plus"></i> Nuevo</button>
     </div>
     <div class="admin-table-wrap">
       <table class="admin-table">
-        <thead><tr><th>ID</th><th>Nombre</th><th>Estado</th><th>Acciones</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="4" class="admin-empty">Sin especialidades. Agregue la primera.</td></tr>'}</tbody>
+        <thead><tr><th>ID</th><th>Nombre</th>${thExtra}<th>Acciones</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="${hasActivo?4:3}" class="admin-empty">Sin registros. Agregue el primero.</td></tr>`}</tbody>
       </table>
     </div>`;
 }
 
-function getEspecialidadesSQL() {
-  return `-- Tabla especialidades para Clínica Santa Bárbara PQRSF
-CREATE TABLE IF NOT EXISTS especialidades (
+function getMaestraSQL(tabla, label, hasActivo) {
+  const colActivo = hasActivo ? '\n  activo BOOLEAN DEFAULT true,' : '';
+  return `-- ${label}
+CREATE TABLE IF NOT EXISTS public.${tabla} (
   id     SERIAL PRIMARY KEY,
-  nombre TEXT NOT NULL,
-  activo BOOLEAN DEFAULT true
+  nombre TEXT NOT NULL${colActivo}
 );
-ALTER TABLE especialidades ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Lectura pública" ON especialidades FOR SELECT USING (true);
-CREATE POLICY "Solo auth modifica" ON especialidades FOR ALL USING (auth.role() = 'authenticated');
-
-INSERT INTO especialidades (nombre) VALUES
-  ('Cardiología'),('Cirugía General'),('Dermatología'),
-  ('Endocrinología'),('Gastroenterología'),('Ginecología y Obstetricia'),
-  ('Hematología'),('Infectología'),('Medicina Interna'),
-  ('Nefrología'),('Neumología'),('Neurología'),
-  ('Oftalmología'),('Oncología'),('Ortopedia y Traumatología'),
-  ('Otorrinolaringología'),('Pediatría'),('Psiquiatría'),
-  ('Reumatología'),('Urología'),('Urgencias'),
-  ('Medicina General'),('Nutrición y Dietética'),
-  ('Fisioterapia y Rehabilitación'),('Odontología'),
-  ('Radiología e Imágenes Diagnósticas')
-ON CONFLICT DO NOTHING;`;
+ALTER TABLE public.${tabla} ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "sel_${tabla.replace(/[^a-z0-9]/g,'_')}"
+  ON public.${tabla} FOR SELECT USING (true);
+CREATE POLICY "mod_${tabla.replace(/[^a-z0-9]/g,'_')}"
+  ON public.${tabla} FOR ALL TO authenticated USING (true) WITH CHECK (true);`;
 }
 
-function copiarSQL() {
-  navigator.clipboard.writeText(getEspecialidadesSQL())
-    .then(() => alert('SQL copiado al portapapeles.'))
-    .catch(() => alert('No se pudo copiar automáticamente. Seleccione el texto y copie manualmente.'));
-}
-
-function adminNewEsp() {
+function maestraNew(tabla, hasActivo) {
   adminEditingId   = null;
-  adminModalSaveFn = adminSaveEsp;
+  const cfg = MAESTRAS_CONFIG.find(c => c.tabla === tabla);
+  adminModalSaveFn = () => maestraSave(tabla, hasActivo);
   document.getElementById('adminModalTitle').innerHTML =
-    '<i class="fa-solid fa-stethoscope" style="margin-right:8px;color:#2471c8"></i>Nueva especialidad';
+    `<i class="fa-solid fa-plus" style="margin-right:8px;color:#2471c8"></i>Nuevo — ${cfg?.label ?? tabla}`;
   document.getElementById('adminModalBody').innerHTML = `
     <div class="admin-form-grid">
       <div class="admin-form-field full">
-        <label>Nombre de la especialidad</label>
-        <input id="esp-nombre" placeholder="Ej. Cardiología"/>
+        <label>Nombre</label>
+        <input id="m-nombre" placeholder="Ingrese el nombre…" autofocus/>
       </div>
+      ${hasActivo ? `
       <div class="admin-form-field">
         <label>Estado</label>
-        <select id="esp-activo"><option value="1">Activo</option><option value="0">Inactivo</option></select>
-      </div>
+        <select id="m-activo"><option value="1">Activo</option><option value="0">Inactivo</option></select>
+      </div>` : ''}
     </div>`;
   document.getElementById('adminModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('m-nombre')?.focus(), 100);
 }
 
-function adminEditEsp(id, nombre, activo) {
+function maestraEdit(tabla, id, nombre, hasActivo, activo) {
   adminEditingId   = id;
-  adminModalSaveFn = adminSaveEsp;
+  const cfg = MAESTRAS_CONFIG.find(c => c.tabla === tabla);
+  adminModalSaveFn = () => maestraSave(tabla, hasActivo);
   document.getElementById('adminModalTitle').innerHTML =
-    '<i class="fa-solid fa-pen" style="margin-right:8px;color:#2471c8"></i>Editar especialidad';
+    `<i class="fa-solid fa-pen" style="margin-right:8px;color:#2471c8"></i>Editar — ${cfg?.label ?? tabla}`;
   document.getElementById('adminModalBody').innerHTML = `
     <div class="admin-form-grid">
       <div class="admin-form-field full">
-        <label>Nombre de la especialidad</label>
-        <input id="esp-nombre" value="${esc(nombre)}"/>
+        <label>Nombre</label>
+        <input id="m-nombre" value="${esc(nombre)}"/>
       </div>
+      ${hasActivo ? `
       <div class="admin-form-field">
         <label>Estado</label>
-        <select id="esp-activo">
-          <option value="1" ${activo ? 'selected' : ''}>Activo</option>
-          <option value="0" ${!activo ? 'selected' : ''}>Inactivo</option>
+        <select id="m-activo">
+          <option value="1" ${activo !== false ? 'selected' : ''}>Activo</option>
+          <option value="0" ${activo === false ? 'selected' : ''}>Inactivo</option>
         </select>
-      </div>
+      </div>` : ''}
     </div>`;
   document.getElementById('adminModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('m-nombre')?.focus(), 100);
 }
 
-async function adminSaveEsp() {
-  const nombre = document.getElementById('esp-nombre')?.value.trim();
-  const activo = document.getElementById('esp-activo')?.value === '1';
+async function maestraSave(tabla, hasActivo) {
+  const nombre = document.getElementById('m-nombre')?.value.trim();
   if (!nombre) { alert('El nombre es obligatorio.'); return; }
+  const payload = { nombre };
+  if (hasActivo) payload.activo = document.getElementById('m-activo')?.value === '1';
 
-  showLoading('Guardando especialidad…');
-
+  showLoading('Guardando…');
   const { error } = adminEditingId
-    ? await db.from('especialidades').update({ nombre, activo }).eq('id', adminEditingId)
-    : await db.from('especialidades').insert({ nombre, activo });
-
+    ? await db.from(tabla).update(payload).eq('id', adminEditingId)
+    : await db.from(tabla).insert(payload);
   hideLoading();
   if (error) { alert('Error: ' + error.message); return; }
-
   closeModal('adminModal');
-  loadAdminEspecialidades();
+  showMaestraTable(tabla);
 }
 
-async function adminDeleteEsp(id, nombre) {
-  if (!confirm(`¿Eliminar la especialidad "${nombre}"? Esta acción no se puede deshacer.`)) return;
+async function maestraDelete(tabla, id, nombre) {
+  if (!confirm(`¿Eliminar "${nombre}"?\nEsta acción no se puede deshacer.`)) return;
   showLoading('Eliminando…');
-  const { error } = await db.from('especialidades').delete().eq('id', id);
+  const { error } = await db.from(tabla).delete().eq('id', id);
   hideLoading();
   if (error) { alert('Error: ' + error.message); return; }
-  loadAdminEspecialidades();
+  showMaestraTable(tabla);
 }
 
 /* ── Resumen de tablas ────────────────────────────────────── */
@@ -1471,41 +1504,44 @@ async function loadAdminResumen() {
   const panel = document.getElementById('adminContent');
   panel.innerHTML = '<div class="admin-empty"><i class="fa-solid fa-spinner fa-spin"></i> Calculando…</div>';
 
-  const [r1, r2, r3, r4] = await Promise.all([
-    db.from('reportes_pqrsf').select('id', { count:'exact', head:true }),
-    db.from('respuestas_pqrsf').select('id', { count:'exact', head:true }),
-    db.from('consola_perfiles').select('id', { count:'exact', head:true }),
-    db.from('especialidades').select('id', { count:'exact', head:true }),
-  ]);
+  // Tablas principales + todas las maestras
+  const mainTables = [
+    { t:'reportes_pqrsf',   icon:'fa-inbox',      color:'#2471c8', label:'reportes_pqrsf'  },
+    { t:'respuestas_pqrsf', icon:'fa-reply',      color:'#16a34a', label:'respuestas_pqrsf'},
+    { t:'consola_perfiles', icon:'fa-users',      color:'#ea580c', label:'consola_perfiles' },
+  ];
+  const allTables = [
+    ...mainTables,
+    ...MAESTRAS_CONFIG.map(c => ({ t:c.tabla, icon:'fa-list', color:'#8b5cf6', label:c.tabla }))
+  ];
 
-  const tabla = (nombre, n, icon, color) => `
-    <tr>
-      <td><i class="fa-solid ${icon}" style="color:${color};margin-right:8px"></i>${nombre}</td>
-      <td style="font-size:18px;font-weight:800;color:${color}">${n ?? '—'}</td>
-      <td style="font-size:12px;color:#6b7280">${n !== null ? 'OK' : 'Error / tabla no existe'}</td>
+  const results = await Promise.all(
+    allTables.map(({ t }) => db.from(t).select('id', { count:'exact', head:true }))
+  );
+
+  const rows = allTables.map(({ label, icon, color }, i) => {
+    const n = results[i].count;
+    return `<tr>
+      <td><i class="fa-solid ${icon}" style="color:${color};margin-right:8px"></i>${label}</td>
+      <td style="font-size:16px;font-weight:800;color:${color}">${n ?? '—'}</td>
+      <td style="font-size:12px;color:${n !== null ? '#16a34a' : '#dc2626'}">${n !== null ? '✓ OK' : '✗ No existe'}</td>
     </tr>`;
+  }).join('');
 
   panel.innerHTML = `
     <div class="admin-panel-header">
-      <span style="font-size:14px;font-weight:700;color:#0d2d6b"><i class="fa-solid fa-table" style="margin-right:6px"></i>Resumen de tablas del proyecto</span>
+      <span style="font-size:14px;font-weight:700;color:#0d2d6b"><i class="fa-solid fa-table" style="margin-right:6px"></i>Resumen de tablas</span>
       <button class="btn-outline-sm" onclick="loadAdminResumen()"><i class="fa-solid fa-rotate-right"></i> Actualizar</button>
     </div>
     <div class="admin-table-wrap">
       <table class="admin-table">
         <thead><tr><th>Tabla</th><th>Registros</th><th>Estado</th></tr></thead>
-        <tbody>
-          ${tabla('reportes_pqrsf',    r1.count, 'fa-inbox',          '#2471c8')}
-          ${tabla('respuestas_pqrsf',  r2.count, 'fa-reply',          '#16a34a')}
-          ${tabla('consola_perfiles',  r3.count, 'fa-users',          '#ea580c')}
-          ${tabla('especialidades',    r4.count, 'fa-stethoscope',    '#8b5cf6')}
-        </tbody>
+        <tbody>${rows}</tbody>
       </table>
     </div>
-    <div style="margin-top:16px;padding:14px;background:#f0f6ff;border-radius:8px;font-size:12px;color:#374151;line-height:1.7">
-      <b><i class="fa-solid fa-circle-info" style="color:#2471c8;margin-right:4px"></i>Notas:</b><br>
-      • <b>reportes_pqrsf</b> y <b>respuestas_pqrsf</b> se gestionan desde las secciones Registros y Kanban.<br>
-      • <b>consola_perfiles</b> se gestiona en la pestaña "Usuarios / Perfiles".<br>
-      • <b>especialidades</b> se gestiona en la pestaña "Especialidades" (crear tabla con SQL si no existe).
+    <div style="margin-top:14px;padding:12px 16px;background:#f0f6ff;border-radius:8px;font-size:12px;color:#374151;line-height:1.8">
+      <i class="fa-solid fa-circle-info" style="color:#2471c8;margin-right:4px"></i>
+      Las tablas con <b>✗ No existe</b> se pueden crear desde <b>Tablas maestras → seleccione la tabla → copie el SQL</b>.
     </div>`;
 }
 
