@@ -11,6 +11,30 @@ let isEditing    = false;
 let sortCol      = 'id';
 let sortDir      = 'desc';
 let chartTipo, chartMes, chartSede, chartEstado;
+let logoBase64   = null; // logo precargado para PDF
+
+/* ── Precargar logo para PDF ────────────────────────────────── */
+function preloadLogo() {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width  = img.naturalWidth  || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      try {
+        logoBase64 = canvas.toDataURL('image/png');
+      } catch(e) {
+        logoBase64 = null;
+      }
+      resolve();
+    };
+    img.onerror = () => { logoBase64 = null; resolve(); };
+    img.src = 'assets/logo.png?v=' + Date.now();
+  });
+}
 
 const STAGES    = ['Recibida', 'En gestión', 'Respondida', 'Cerrada'];
 const TIPO_CFG  = {
@@ -56,6 +80,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (rol !== 'admin') {
     document.getElementById('btnDelete')?.style && (document.getElementById('btnDelete').style.display = 'none');
   }
+
+  // Precargar logo para PDF
+  await preloadLogo();
 
   // Load all data
   await loadAllData();
@@ -687,27 +714,60 @@ function generatePDFById(id) {
   const doc  = new jsPDF({ unit:'mm', format:'a4' });
   const W    = 210, ml = 15, mr = 15, cw = W - ml - mr;
 
-  // Header
+  // Header background
   doc.setFillColor(13,45,107);
-  doc.rect(0, 0, W, 35, 'F');
-  doc.setTextColor(255,255,255);
-  doc.setFontSize(14); doc.setFont('helvetica','bold');
-  doc.text('Clínica de Alta Complejidad Santa Bárbara', W/2, 13, {align:'center'});
-  doc.setFontSize(10); doc.setFont('helvetica','normal');
-  doc.text('SIAU – Sistema PQRSF', W/2, 20, {align:'center'});
-  doc.setFontSize(9);
-  doc.text('Peticiones · Quejas · Reclamos · Sugerencias · Felicitaciones', W/2, 27, {align:'center'});
+  doc.rect(0, 0, W, 38, 'F');
+
+  // Logo (si está disponible)
+  if (logoBase64) {
+    try {
+      // Calcular dimensiones proporcionales (alto máx 28mm)
+      const tmpImg = new Image();
+      tmpImg.src = logoBase64;
+      const ratio  = tmpImg.width  / tmpImg.height;
+      const logoH  = 26;
+      const logoW  = Math.min(logoH * ratio, 45); // máx 45mm de ancho
+      doc.addImage(logoBase64, 'PNG', ml, (38 - logoH) / 2, logoW, logoH);
+      // Texto a la derecha del logo
+      const tx = ml + logoW + 6;
+      doc.setTextColor(255,255,255);
+      doc.setFontSize(13); doc.setFont('helvetica','bold');
+      doc.text('Clínica de Alta Complejidad Santa Bárbara', tx, 14);
+      doc.setFontSize(9); doc.setFont('helvetica','normal');
+      doc.text('SIAU – Sistema PQRSF', tx, 21);
+      doc.setFontSize(8);
+      doc.text('Peticiones · Quejas · Reclamos · Sugerencias · Felicitaciones', tx, 28);
+    } catch(e) {
+      // Fallback sin logo
+      doc.setTextColor(255,255,255);
+      doc.setFontSize(14); doc.setFont('helvetica','bold');
+      doc.text('Clínica de Alta Complejidad Santa Bárbara', W/2, 14, {align:'center'});
+      doc.setFontSize(10); doc.setFont('helvetica','normal');
+      doc.text('SIAU – Sistema PQRSF', W/2, 21, {align:'center'});
+      doc.setFontSize(9);
+      doc.text('Peticiones · Quejas · Reclamos · Sugerencias · Felicitaciones', W/2, 29, {align:'center'});
+    }
+  } else {
+    // Sin logo: texto centrado
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(14); doc.setFont('helvetica','bold');
+    doc.text('Clínica de Alta Complejidad Santa Bárbara', W/2, 14, {align:'center'});
+    doc.setFontSize(10); doc.setFont('helvetica','normal');
+    doc.text('SIAU – Sistema PQRSF', W/2, 21, {align:'center'});
+    doc.setFontSize(9);
+    doc.text('Peticiones · Quejas · Reclamos · Sugerencias · Felicitaciones', W/2, 29, {align:'center'});
+  }
 
   // Radicado box
   const radicado = `PQRSF-${String(r.id).padStart(6,'0')}`;
   doc.setFillColor(240,246,255);
-  doc.roundedRect(ml, 40, cw, 18, 3, 3, 'F');
+  doc.roundedRect(ml, 43, cw, 18, 3, 3, 'F');
   doc.setTextColor(13,45,107); doc.setFontSize(18); doc.setFont('helvetica','bold');
-  doc.text(radicado, W/2, 51, {align:'center'});
+  doc.text(radicado, W/2, 54, {align:'center'});
   doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(107,114,128);
-  doc.text(`Tipo: ${r.tipo_reporte ?? '—'}   |   Estado: ${r.estado ?? 'Recibida'}   |   Generado: ${new Date().toLocaleDateString('es-CO')}`, W/2, 58, {align:'center'});
+  doc.text(`Tipo: ${r.tipo_reporte ?? '—'}   |   Estado: ${r.estado ?? 'Recibida'}   |   Generado: ${new Date().toLocaleDateString('es-CO')}`, W/2, 61, {align:'center'});
 
-  let y = 68;
+  let y = 70;
 
   // PQRSF data table
   doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(13,45,107);
