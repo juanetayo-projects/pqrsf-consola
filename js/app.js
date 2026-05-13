@@ -143,12 +143,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   const session = await requireAuth();
   if (!session) return;
 
-  // User info
-  const { data: profile } = await db
-    .from('consola_perfiles')
-    .select('*')
-    .eq('id', session.user.id)
-    .single();
+  // User info — intenta por UUID primero, luego por email como fallback
+  let profile = null;
+  {
+    const { data: d1, error: e1 } = await db
+      .from('consola_perfiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .maybeSingle();
+
+    if (d1) {
+      profile = d1;
+    } else {
+      // Fallback: buscar por email (útil si la política RLS filtra por email)
+      const { data: d2 } = await db
+        .from('consola_perfiles')
+        .select('*')
+        .eq('email', session.user.email)
+        .maybeSingle();
+      profile = d2;
+      if (e1) console.warn('consola_perfiles por ID falló:', e1.message,
+                            '| fallback por email:', d2 ? 'encontrado' : 'no encontrado');
+    }
+  }
 
   const nombre = profile?.nombre ?? session.user.email.split('@')[0];
   const rol    = profile?.rol    ?? 'analista';
