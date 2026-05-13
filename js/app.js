@@ -704,6 +704,48 @@ function renderTable(recs) {
 }
 
 /* ════════════════════════════════════════════════════════════
+   ADJUNTO – tarjeta visual (reporte y respuesta)
+════════════════════════════════════════════════════════════ */
+function buildAttachCard(url, nombre, accent) {
+  if (!nombre || !url) return '';
+  const ext = (nombre.split('.').pop() || '').toLowerCase();
+  const iconMap = {
+    pdf : { icon: 'fa-file-pdf',   bg: '#fef2f2', color: '#dc2626' },
+    doc : { icon: 'fa-file-word',  bg: '#eff6ff', color: '#2563eb' },
+    docx: { icon: 'fa-file-word',  bg: '#eff6ff', color: '#2563eb' },
+    txt : { icon: 'fa-file-lines', bg: '#f9fafb', color: '#374151' },
+    png : { icon: 'fa-file-image', bg: '#f0fdf4', color: '#16a34a' },
+    jpg : { icon: 'fa-file-image', bg: '#f0fdf4', color: '#16a34a' },
+    jpeg: { icon: 'fa-file-image', bg: '#f0fdf4', color: '#16a34a' },
+  };
+  const fi = iconMap[ext] ?? { icon: 'fa-file', bg: '#f3f4f6', color: '#6b7280' };
+  const isImg = ['png','jpg','jpeg'].includes(ext);
+
+  return `
+    <div class="detail-field full">
+      <div class="detail-label">Documento adjunto</div>
+      <div class="attach-card" style="border-left-color:${accent}">
+        ${isImg ? `<img class="attach-thumb" src="${esc(url)}" alt="${esc(nombre)}" onerror="this.style.display='none'" />` : ''}
+        <div class="attach-icon-wrap" style="background:${fi.bg}">
+          <i class="fa-solid ${fi.icon}" style="color:${fi.color}"></i>
+        </div>
+        <div class="attach-info">
+          <span class="attach-name">${esc(nombre)}</span>
+          <span class="attach-ext">${ext.toUpperCase()}</span>
+        </div>
+        <div class="attach-btns">
+          <a href="${esc(url)}" target="_blank" class="attach-btn-view" title="Ver documento">
+            <i class="fa-solid fa-eye"></i> Ver
+          </a>
+          <a href="${esc(url)}" download="${esc(nombre)}" class="attach-btn-dl" title="Descargar">
+            <i class="fa-solid fa-download"></i>
+          </a>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ════════════════════════════════════════════════════════════
    RECORD MODAL – VER / EDITAR
 ════════════════════════════════════════════════════════════ */
 function openRecord(id) {
@@ -770,8 +812,7 @@ function renderViewForm(r, resp) {
       ${df('Falla / Atributo',     r.falla_atributo)}
       ${df('Especialidad',         r.especialidad)}
       ${df('Colaborador reporte',  r.colaborador)}
-      ${r.archivo_nombre ? `<div class="detail-field full"><div class="detail-label">Documento adjunto</div>
-        <div class="detail-value"><a href="${esc(r.archivo_url??'#')}" target="_blank" style="color:#2471c8"><i class="fa-solid fa-paperclip"></i> ${esc(r.archivo_nombre)}</a></div></div>` : ''}
+      ${buildAttachCard(r.archivo_url, r.archivo_nombre, '#2471c8')}
     </div>
     ${r.descripcion ? `<div class="description-box" style="margin-top:12px">
       <div class="detail-label">Descripción del caso</div>
@@ -791,8 +832,7 @@ function renderViewForm(r, resp) {
       ${df('Respondido por',        resp.respondido_por_nombre)}
       ${df('Correo responsable',    resp.respondido_por_email)}
       ${df('Colaborador involucrado', resp.colaborador)}
-      ${resp.archivo_nombre ? `<div class="detail-field full"><div class="detail-label">Documento adjunto</div>
-        <div class="detail-value"><a href="${esc(resp.archivo_url??'#')}" target="_blank" style="color:#16a34a"><i class="fa-solid fa-paperclip"></i> ${esc(resp.archivo_nombre)}</a></div></div>` : ''}
+      ${buildAttachCard(resp.archivo_url, resp.archivo_nombre, '#16a34a')}
     </div>
     <div class="description-box" style="margin-top:12px;border-left-color:#16a34a;background:#f0fdf4">
       <div class="detail-label" style="color:#166534">Texto de la respuesta</div>
