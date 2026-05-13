@@ -20,6 +20,8 @@ const LOGO_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAj8AAAClCAYAAACz
 // Se convierte desde el PNG al cargar la página vía canvas → nunca falla en jsPDF.
 let logoJpeg   = null;
 let logoBase64 = null; // alias para compatibilidad
+let logoNaturalW = 0;  // dimensiones reales del logo (para respetar proporciones en PDF)
+let logoNaturalH = 0;
 
 /* ── preloadLogo ────────────────────────────────────────────── */
 // Intenta cargar logo.jpg (nativo JPEG para jsPDF), luego logo.png,
@@ -29,15 +31,27 @@ async function preloadLogo() {
   try {
     const res = await fetch('assets/logo.jpg');
     if (res.ok) {
-      const blob   = await res.blob();
+      const blob    = await res.blob();
       const dataUrl = await new Promise(r => {
         const fr = new FileReader();
         fr.onload = () => r(fr.result);
         fr.readAsDataURL(blob);
       });
+      // Medir dimensiones reales antes de continuar
+      await new Promise(resolve => {
+        const img = new Image();
+        img.onload = function() {
+          logoNaturalW = this.naturalWidth;
+          logoNaturalH = this.naturalHeight;
+          resolve();
+        };
+        img.onerror = resolve;
+        img.src = dataUrl;
+      });
       logoBase64 = dataUrl;
       logoJpeg   = dataUrl.split(',')[1];
-      console.log('✓ Logo desde assets/logo.jpg — longitud:', logoJpeg.length);
+      console.log('✓ Logo desde assets/logo.jpg — longitud:', logoJpeg.length,
+                  '| dims:', logoNaturalW, '×', logoNaturalH);
       return;
     }
   } catch(_) {}
@@ -60,9 +74,12 @@ async function preloadLogo() {
             ctx.fillRect(0, 0, c.width, c.height);
             ctx.drawImage(this, 0, 0);
             const dataUrl = c.toDataURL('image/jpeg', 0.92);
-            logoJpeg   = dataUrl.split(',')[1];
-            logoBase64 = dataUrl;
-            console.log('✓ Logo desde assets/logo.png (canvas) — longitud:', logoJpeg.length);
+            logoJpeg     = dataUrl.split(',')[1];
+            logoBase64   = dataUrl;
+            logoNaturalW = this.naturalWidth;
+            logoNaturalH = this.naturalHeight;
+            console.log('✓ Logo desde assets/logo.png (canvas) — longitud:', logoJpeg.length,
+                        '| dims:', logoNaturalW, '×', logoNaturalH);
           } catch(e) { console.error('Canvas error (logo.png):', e); }
           URL.revokeObjectURL(objUrl);
           resolve();
@@ -87,9 +104,12 @@ async function preloadLogo() {
         ctx.fillRect(0, 0, c.width, c.height);
         ctx.drawImage(this, 0, 0);
         const dataUrl = c.toDataURL('image/jpeg', 0.92);
-        logoJpeg   = dataUrl.split(',')[1];
-        logoBase64 = dataUrl;
-        console.log('▶ Logo desde LOGO_B64 embebida — longitud:', logoJpeg.length);
+        logoJpeg     = dataUrl.split(',')[1];
+        logoBase64   = dataUrl;
+        logoNaturalW = this.naturalWidth;
+        logoNaturalH = this.naturalHeight;
+        console.log('▶ Logo desde LOGO_B64 embebida — longitud:', logoJpeg.length,
+                    '| dims:', logoNaturalW, '×', logoNaturalH);
       } catch(e) { console.error('Canvas error (LOGO_B64):', e); }
       resolve();
     };
@@ -140,12 +160,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('sbDate').textContent =
     new Date().toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' });
 
-  // Admin-only elements
-  if (rol === 'admin') {
+  // Verificar si hay al menos un admin en el sistema (bootstrap)
+  const { count: adminCount } = await db
+    .from('consola_perfiles')
+    .select('id', { count: 'exact', head: true })
+    .eq('rol', 'admin');
+
+  // Mostrar módulo admin si: el usuario es admin O si aún no hay ningún admin
+  const esAdmin = (rol === 'admin') || (adminCount === 0);
+
+  if (esAdmin) {
     const navAdmin = document.getElementById('navAdmin');
     if (navAdmin) navAdmin.style.display = 'flex';
     const divider = document.getElementById('navAdminDivider');
     if (divider) divider.style.display = '';
+    // Si entró por bootstrap, actualizar rol en perfil automáticamente
+    if (adminCount === 0 && profile) {
+      await db.from('consola_perfiles').update({ rol: 'admin' }).eq('id', session.user.id);
+      document.getElementById('userRole').textContent = 'admin';
+    }
   } else {
     // Hide delete for non-admin
     document.getElementById('btnDelete')?.style && (document.getElementById('btnDelete').style.display = 'none');
@@ -922,8 +955,12 @@ function generatePDFById(id) {
   // ── Logo header ───────────────────────────────────────────────
   // logoJpeg = base64 JPEG puro convertido desde el PNG al cargar la app.
   // jsPDF maneja JPEG de forma nativa y sin parser especial → siempre funciona.
+  // Dimensiones del logo: respetar proporciones reales de la imagen cargada
   const logoH = 28;
-  const logoW = logoH * (575 / 677); // ≈ 23.8 mm (ratio real del PNG 575×677 px)
+  const ratio = (logoNaturalW > 0 && logoNaturalH > 0)
+    ? (logoNaturalW / logoNaturalH)
+    : 1;                          // cuadrado si no se pudo medir
+  const logoW = logoH * ratio;
 
   console.log('▶ PDF: logoJpeg =', logoJpeg ? logoJpeg.length + ' chars' : 'NULL');
   if (logoJpeg) {
