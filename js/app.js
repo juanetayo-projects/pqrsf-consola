@@ -762,11 +762,12 @@ function generatePDFById(id) {
   doc.rect(0, 0, W, 38, 'F');
 
   // Logo incrustado — dimensiones fijas (logo.png: 575×677 px → ratio ≈ 0.85)
-  // No se usa new Image() porque es asíncrono y width/height serían 0
-  const logoH = 28;          // alto en mm
-  const logoW = logoH * (575 / 677); // ≈ 23.8 mm — proporcional al PNG real
+  const logoH  = 28;
+  const logoW  = logoH * (575 / 677); // ≈ 23.8 mm
+  // jsPDF 2.x: pasar SÓLO los bytes base64 sin el prefijo "data:image/png;base64,"
+  const logoData = LOGO_B64.split(',')[1]; // extrae la parte pura base64
   try {
-    doc.addImage(logoBase64, 'PNG', ml, (38 - logoH) / 2, logoW, logoH);
+    doc.addImage(logoData, 'PNG', ml, (38 - logoH) / 2, logoW, logoH);
     const tx = ml + logoW + 5;
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(13); doc.setFont('helvetica', 'bold');
@@ -776,7 +777,8 @@ function generatePDFById(id) {
     doc.setFontSize(8);
     doc.text('Peticiones · Quejas · Reclamos · Sugerencias · Felicitaciones', tx, 29);
   } catch (e) {
-    // Fallback texto centrado si addImage falla
+    console.error('addImage error:', e);
+    // Fallback texto centrado
     doc.setTextColor(255,255,255);
     doc.setFontSize(14); doc.setFont('helvetica','bold');
     doc.text('Clínica de Alta Complejidad Santa Bárbara', W/2, 14, {align:'center'});
