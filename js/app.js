@@ -13,27 +13,22 @@ let sortDir      = 'desc';
 let chartTipo, chartMes, chartSede, chartEstado;
 let logoBase64   = null; // logo precargado para PDF
 
-/* ── Precargar logo para PDF ────────────────────────────────── */
-function preloadLogo() {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width  = img.naturalWidth  || img.width;
-      canvas.height = img.naturalHeight || img.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      try {
-        logoBase64 = canvas.toDataURL('image/png');
-      } catch(e) {
-        logoBase64 = null;
-      }
-      resolve();
-    };
-    img.onerror = () => { logoBase64 = null; resolve(); };
-    img.src = 'assets/logo.png?v=' + Date.now();
-  });
+/* ── Precargar logo para PDF (fetch → base64, sin CORS) ─────── */
+async function preloadLogo() {
+  try {
+    const res  = await fetch('assets/logo.png');
+    if (!res.ok) throw new Error('not found');
+    const blob = await res.blob();
+    logoBase64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror  = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.warn('Logo no cargado para PDF:', e.message);
+    logoBase64 = null;
+  }
 }
 
 const STAGES    = ['Recibida', 'En gestión', 'Respondida', 'Cerrada'];
@@ -247,7 +242,7 @@ function buildCharts(recs) {
 /* ── Chart defaults – Odoo compact style ───────────────────── */
 const CHART_DEFAULTS = {
   responsive: true,
-  maintainAspectRatio: true,
+  maintainAspectRatio: false,
   animation: { duration: 400 },
   plugins: {
     legend: { display: false },
@@ -285,9 +280,9 @@ function buildChartTipo(recs) {
     data: { labels, datasets:[{ data, backgroundColor: colors, borderWidth: 2, borderColor:'#fff', hoverOffset: 4 }]},
     options: {
       responsive: true,
-      maintainAspectRatio: true,
+      maintainAspectRatio: false,
       animation: { duration: 400 },
-      cutout: '68%',
+      cutout: '65%',
       plugins: {
         legend: {
           position: 'bottom',
