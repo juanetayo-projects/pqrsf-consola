@@ -26,20 +26,22 @@ function preloadLogo() {
   return new Promise(resolve => {
     const img = new Image();
     img.onload = function () {
+      console.log('▶ img.onload – naturalWidth:', this.naturalWidth, 'naturalHeight:', this.naturalHeight);
       try {
         const c   = document.createElement('canvas');
         c.width   = this.naturalWidth  || 575;
         c.height  = this.naturalHeight || 677;
         const ctx = c.getContext('2d');
-        ctx.fillStyle = '#ffffff';           // fondo blanco (JPEG no tiene alfa)
+        ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, c.width, c.height);
         ctx.drawImage(this, 0, 0);
         const dataUrl = c.toDataURL('image/jpeg', 0.92);
-        logoJpeg   = dataUrl.split(',')[1];  // base64 puro, sin prefijo
+        console.log('▶ dataUrl start:', dataUrl.substring(0, 60));
+        logoJpeg   = dataUrl.split(',')[1];
         logoBase64 = dataUrl;
-        console.log('Logo listo ✓ longitud JPEG:', logoJpeg.length);
+        console.log('▶ logoJpeg length:', logoJpeg.length, '| starts:', logoJpeg.substring(0, 20));
       } catch (e) {
-        console.warn('Logo canvas falló:', e);
+        console.error('▶ Logo canvas ERROR:', e);
       }
       resolve();
     };
@@ -795,8 +797,14 @@ function generatePDFById(id) {
   const logoH = 28;
   const logoW = logoH * (575 / 677); // ≈ 23.8 mm (ratio real del PNG 575×677 px)
 
+  console.log('▶ PDF: logoJpeg =', logoJpeg ? logoJpeg.length + ' chars' : 'NULL');
   if (logoJpeg) {
-    doc.addImage(logoJpeg, 'JPEG', ml, (38 - logoH) / 2, logoW, logoH);
+    try {
+      doc.addImage(logoJpeg, 'JPEG', ml, (38 - logoH) / 2, logoW, logoH);
+      console.log('▶ addImage OK');
+    } catch(e) {
+      console.error('▶ addImage ERROR:', e);
+    }
     const tx = ml + logoW + 5;
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(13); doc.setFont('helvetica', 'bold');
