@@ -60,6 +60,10 @@
     <a class="nav-item" onclick="printDashboard()">
       <i class="fa-solid fa-print"></i><span>Imprimir</span>
     </a>
+    <div class="nav-divider" id="navAdminDivider" style="display:none"></div>
+    <a class="nav-item" id="navAdmin" data-section="admin" onclick="showSection('admin')" style="display:none">
+      <i class="fa-solid fa-shield-halved"></i><span>Administrador</span>
+    </a>
   </nav>
   <div class="sidebar-footer">
     <span>PQRSF v3.0</span>
@@ -239,6 +243,30 @@
     <div class="table-footer" id="tableFooter"></div>
   </section>
 
+
+  <!-- ════════════════════════════════════════════
+       ADMIN MODULE (solo visible para admin)
+  ════════════════════════════════════════════ -->
+  <section id="sec-admin" class="section">
+    <div class="section-toolbar">
+      <h2 class="section-title"><i class="fa-solid fa-shield-halved"></i> Módulo Administrador</h2>
+    </div>
+    <div class="admin-tabs" id="adminTabs">
+      <button class="admin-tab active" id="atab-perfiles" onclick="showAdminTab('perfiles')">
+        <i class="fa-solid fa-users"></i> Usuarios / Perfiles
+      </button>
+      <button class="admin-tab" id="atab-especialidades" onclick="showAdminTab('especialidades')">
+        <i class="fa-solid fa-stethoscope"></i> Especialidades
+      </button>
+      <button class="admin-tab" id="atab-resumen" onclick="showAdminTab('resumen')">
+        <i class="fa-solid fa-table"></i> Resumen tablas
+      </button>
+    </div>
+    <div class="admin-panel" id="adminContent">
+      <div class="admin-empty"><i class="fa-solid fa-spinner fa-spin"></i> Cargando…</div>
+    </div>
+  </section>
+
 </main>
 
 <!-- ══════════════════════════════════════════════════════════════
@@ -306,6 +334,26 @@
         <button class="btn-secondary-sm" onclick="closeModal('deleteModal')">Cancelar</button>
         <button class="btn-danger-sm" onclick="deleteRecord()">
           <i class="fa-solid fa-trash"></i> Sí, eliminar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: Admin genérico ──────────────────────────────────── -->
+<div class="modal-overlay" id="adminModal" style="display:none">
+  <div class="modal-box modal-md">
+    <div class="modal-header">
+      <div class="modal-title" id="adminModalTitle">—</div>
+      <button class="modal-close" onclick="closeModal('adminModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="adminModalBody" style="padding:24px"></div>
+    <div class="modal-footer">
+      <div></div>
+      <div class="modal-footer-right">
+        <button class="btn-secondary-sm" onclick="closeModal('adminModal')">Cancelar</button>
+        <button class="btn-success-sm" id="btnAdminSave" onclick="adminModalSave()">
+          <i class="fa-solid fa-floppy-disk"></i> Guardar
         </button>
       </div>
     </div>
