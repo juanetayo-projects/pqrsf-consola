@@ -24,98 +24,79 @@ let logoNaturalW = 0;  // dimensiones reales del logo (para respetar proporcione
 let logoNaturalH = 0;
 
 /* ── preloadLogo ────────────────────────────────────────────── */
-// Intenta cargar logo.jpg (nativo JPEG para jsPDF), luego logo.png,
-// finalmente cae al LOGO_B64 embebido. Usa canvas para PNG → JPEG.
+// Todas las rutas pasan por canvas para garantizar:
+//   • Dimensiones capturadas desde img.naturalWidth/Height (100% confiable)
+//   • Salida JPEG uniforme para jsPDF
+//   • Fondo azul (#0d2d6b) para logos con transparencia (PNG)
 async function preloadLogo() {
-  // ── 1. Intentar assets/logo.jpg ──────────────────────────────
+
+  // Helper: URL → Image → canvas → { dataUrl, w, h }
+  function imgToJpeg(src, fillBg) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = function () {
+        const w = this.naturalWidth;
+        const h = this.naturalHeight;
+        if (!w || !h) { resolve(null); return; }
+        try {
+          const c   = document.createElement('canvas');
+          c.width   = w;
+          c.height  = h;
+          const ctx = c.getContext('2d');
+          if (fillBg) {                    // PNG con transparencia → fondo azul header
+            ctx.fillStyle = '#0d2d6b';
+            ctx.fillRect(0, 0, w, h);
+          }
+          ctx.drawImage(this, 0, 0);
+          const dataUrl = c.toDataURL('image/jpeg', 0.93);
+          resolve({ dataUrl, w, h });
+        } catch(e) {
+          console.error('imgToJpeg canvas error:', e);
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
+
+  function applyResult(r, label) {
+    if (!r) return false;
+    logoJpeg     = r.dataUrl.split(',')[1];
+    logoBase64   = r.dataUrl;
+    logoNaturalW = r.w;
+    logoNaturalH = r.h;
+    console.log(`✓ Logo (${label}): ${r.w}×${r.h}px — JPEG ${logoJpeg.length} chars`);
+    return true;
+  }
+
+  // ── 1. assets/logo.jpg ───────────────────────────────────────
   try {
     const res = await fetch('assets/logo.jpg');
     if (res.ok) {
-      const blob    = await res.blob();
-      const dataUrl = await new Promise(r => {
-        const fr = new FileReader();
-        fr.onload = () => r(fr.result);
-        fr.readAsDataURL(blob);
-      });
-      // Medir dimensiones reales antes de continuar
-      await new Promise(resolve => {
-        const img = new Image();
-        img.onload = function() {
-          logoNaturalW = this.naturalWidth;
-          logoNaturalH = this.naturalHeight;
-          resolve();
-        };
-        img.onerror = resolve;
-        img.src = dataUrl;
-      });
-      logoBase64 = dataUrl;
-      logoJpeg   = dataUrl.split(',')[1];
-      console.log('✓ Logo desde assets/logo.jpg — longitud:', logoJpeg.length,
-                  '| dims:', logoNaturalW, '×', logoNaturalH);
-      return;
+      const blob   = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const r      = await imgToJpeg(objUrl, false);   // JPEG: sin fondo extra
+      URL.revokeObjectURL(objUrl);
+      if (applyResult(r, 'assets/logo.jpg')) return;
     }
   } catch(_) {}
 
-  // ── 2. Intentar assets/logo.png (convert via canvas) ─────────
+  // ── 2. assets/logo.png ───────────────────────────────────────
   try {
     const res = await fetch('assets/logo.png');
     if (res.ok) {
-      const blob    = await res.blob();
-      const objUrl  = URL.createObjectURL(blob);
-      await new Promise(resolve => {
-        const img = new Image();
-        img.onload = function () {
-          try {
-            const c   = document.createElement('canvas');
-            c.width   = this.naturalWidth  || 400;
-            c.height  = this.naturalHeight || 400;
-            const ctx = c.getContext('2d');
-            ctx.fillStyle = 'rgb(13,45,107)';
-            ctx.fillRect(0, 0, c.width, c.height);
-            ctx.drawImage(this, 0, 0);
-            const dataUrl = c.toDataURL('image/jpeg', 0.92);
-            logoJpeg     = dataUrl.split(',')[1];
-            logoBase64   = dataUrl;
-            logoNaturalW = this.naturalWidth;
-            logoNaturalH = this.naturalHeight;
-            console.log('✓ Logo desde assets/logo.png (canvas) — longitud:', logoJpeg.length,
-                        '| dims:', logoNaturalW, '×', logoNaturalH);
-          } catch(e) { console.error('Canvas error (logo.png):', e); }
-          URL.revokeObjectURL(objUrl);
-          resolve();
-        };
-        img.onerror = () => { URL.revokeObjectURL(objUrl); resolve(); };
-        img.src = objUrl;
-      });
-      if (logoJpeg) return;
+      const blob   = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const r      = await imgToJpeg(objUrl, true);    // PNG: fondo azul
+      URL.revokeObjectURL(objUrl);
+      if (applyResult(r, 'assets/logo.png')) return;
     }
   } catch(_) {}
 
-  // ── 3. Fallback: LOGO_B64 embebida ───────────────────────────
-  await new Promise(resolve => {
-    const img = new Image();
-    img.onload = function () {
-      try {
-        const c   = document.createElement('canvas');
-        c.width   = this.naturalWidth  || 575;
-        c.height  = this.naturalHeight || 677;
-        const ctx = c.getContext('2d');
-        ctx.fillStyle = 'rgb(13,45,107)';
-        ctx.fillRect(0, 0, c.width, c.height);
-        ctx.drawImage(this, 0, 0);
-        const dataUrl = c.toDataURL('image/jpeg', 0.92);
-        logoJpeg     = dataUrl.split(',')[1];
-        logoBase64   = dataUrl;
-        logoNaturalW = this.naturalWidth;
-        logoNaturalH = this.naturalHeight;
-        console.log('▶ Logo desde LOGO_B64 embebida — longitud:', logoJpeg.length,
-                    '| dims:', logoNaturalW, '×', logoNaturalH);
-      } catch(e) { console.error('Canvas error (LOGO_B64):', e); }
-      resolve();
-    };
-    img.onerror = () => { console.warn('Logo onerror (LOGO_B64)'); resolve(); };
-    img.src = LOGO_B64;
-  });
+  // ── 3. LOGO_B64 embebida (fallback) ─────────────────────────
+  const r = await imgToJpeg(LOGO_B64, true);
+  applyResult(r, 'LOGO_B64 embebida');
 }
 
 let draggedKanbanId = null;  // ID del registro que se está arrastrando
@@ -143,29 +124,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   const session = await requireAuth();
   if (!session) return;
 
-  // User info — intenta por UUID primero, luego por email como fallback
+  // User info — prioridad: RPC SECURITY DEFINER (bypass RLS), luego tabla directa
   let profile = null;
-  {
-    const { data: d1, error: e1 } = await db
-      .from('consola_perfiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .maybeSingle();
-
-    if (d1) {
-      profile = d1;
+  try {
+    // get_my_console_profile() es SECURITY DEFINER: ignora RLS, 100% confiable
+    const { data: rpcRows, error: rpcErr } = await db.rpc('get_my_console_profile');
+    if (rpcRows && rpcRows.length > 0) {
+      profile = rpcRows[0];
     } else {
-      // Fallback: buscar por email (útil si la política RLS filtra por email)
-      const { data: d2 } = await db
-        .from('consola_perfiles')
-        .select('*')
-        .eq('email', session.user.email)
-        .maybeSingle();
-      profile = d2;
-      if (e1) console.warn('consola_perfiles por ID falló:', e1.message,
-                            '| fallback por email:', d2 ? 'encontrado' : 'no encontrado');
+      if (rpcErr) console.warn('RPC get_my_console_profile:', rpcErr.message);
+      // Fallback a consulta directa (si RPC no existe aún)
+      const { data: d1 } = await db
+        .from('consola_perfiles').select('*')
+        .eq('id', session.user.id).maybeSingle();
+      if (d1) {
+        profile = d1;
+      } else {
+        const { data: d2 } = await db
+          .from('consola_perfiles').select('*')
+          .eq('email', session.user.email).maybeSingle();
+        profile = d2;
+      }
     }
-  }
+  } catch(e) { console.error('Error cargando perfil:', e); }
 
   const nombre = profile?.nombre ?? session.user.email.split('@')[0];
   const rol    = profile?.rol    ?? 'analista';
