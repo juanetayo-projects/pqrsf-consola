@@ -32,7 +32,10 @@ function preloadLogo() {
         c.width   = this.naturalWidth  || 575;
         c.height  = this.naturalHeight || 677;
         const ctx = c.getContext('2d');
-        ctx.fillStyle = '#ffffff';
+        // Fondo = mismo azul del encabezado PDF (rgb 13,45,107)
+        // El logo tiene fondo transparente → los píxeles transparentes toman este color
+        // y los elementos blancos/claros del logo se verán correctamente sobre él.
+        ctx.fillStyle = 'rgb(13,45,107)';
         ctx.fillRect(0, 0, c.width, c.height);
         ctx.drawImage(this, 0, 0);
         const dataUrl = c.toDataURL('image/jpeg', 0.92);
