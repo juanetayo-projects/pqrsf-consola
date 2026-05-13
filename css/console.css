@@ -440,7 +440,20 @@ body{font-family:'Inter',Arial,sans-serif;background:var(--gray-100);color:var(-
 .badge-activo{background:var(--green-100);color:var(--green-600);font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px}
 .badge-inactivo{background:var(--gray-100);color:var(--gray-500);font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px}
 
-/* ── ADJUNTO ────────────────────────────────────────────────── */
+/* ── ADJUNTO EN TABLA ───────────────────────────────────────── */
+.table-attach-icons { display: flex; gap: 5px; align-items: center; }
+.tbl-adj {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  font-size: 12px;
+  text-decoration: none;
+  transition: opacity .15s, transform .1s;
+}
+.tbl-adj:hover { opacity: .8; transform: scale(1.1); }
+.tbl-adj.blue  { background: var(--blue-50);   color: var(--blue-700);  border: 1px solid var(--blue-100); }
+.tbl-adj.green { background: var(--green-50);  color: var(--green-600); border: 1px solid var(--green-100); }
+
 .attach-card {
   display: flex;
   align-items: center;

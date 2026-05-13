@@ -226,7 +226,7 @@ async function loadAllData() {
 
 function populateFilterDropdowns() {
   const tipos     = [...new Set(allRecords.map(r => r.tipo_reporte).filter(Boolean))].sort();
-  const estados   = [...new Set(allRecords.map(r => r.estado).filter(Boolean))].sort();
+  const estados   = STAGES;   // siempre los 4 estados fijos, sin importar qué hay en datos
   const sedes     = [...new Set(allRecords.map(r => r.sede).filter(Boolean))].sort();
   const procesos  = [...new Set(allRecords.map(r => r.proceso).filter(Boolean))].sort();
   const convenios = [...new Set(allRecords.map(r => r.convenio_eps).filter(Boolean))].sort();
@@ -667,10 +667,24 @@ function sortTable(col) {
   filterTable();
 }
 
+/* Íconos de adjunto para celda de tabla — compactos y clicables */
+function buildTableAttachIcons(r) {
+  const resp        = r.respuestas_pqrsf?.[0] ?? null;
+  const repAdj      = r.archivo_url    && r.archivo_nombre;
+  const respAdj     = resp?.archivo_url && resp?.archivo_nombre;
+  if (!repAdj && !respAdj) return '<span style="color:#d1d5db">—</span>';
+
+  let html = '<div class="table-attach-icons">';
+  if (repAdj)  html += `<a href="${esc(r.archivo_url)}" target="_blank" class="tbl-adj blue" title="Adjunto reporte: ${esc(r.archivo_nombre)}"><i class="fa-solid fa-paperclip"></i></a>`;
+  if (respAdj) html += `<a href="${esc(resp.archivo_url)}" target="_blank" class="tbl-adj green" title="Adjunto respuesta: ${esc(resp.archivo_nombre)}"><i class="fa-solid fa-paperclip"></i></a>`;
+  html += '</div>';
+  return html;
+}
+
 function renderTable(recs) {
   const tbody = document.getElementById('tableBody');
   if (!recs.length) {
-    tbody.innerHTML = '<tr><td colspan="10" class="table-loading">Sin registros para mostrar</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="table-loading">Sin registros para mostrar</td></tr>';
     document.getElementById('tableFooter').textContent = '0 registros';
     return;
   }
@@ -692,6 +706,7 @@ function renderTable(recs) {
       <td style="font-size:12px;white-space:nowrap">${fecha}</td>
       <td><span class="badge-estado-table ${estCls}">${esc(r.estado??'Recibida')}</span></td>
       <td><span class="resp-dot ${hasResp?'yes':'no'}" title="${hasResp?'Respondida':'Sin respuesta'}"></span> ${hasResp?'Sí':'No'}</td>
+      <td>${buildTableAttachIcons(r)}</td>
       <td><div class="table-actions">
         <button class="btn-tbl view" onclick="openRecord(${r.id})" title="Ver"><i class="fa-solid fa-eye"></i></button>
         <button class="btn-tbl pdf"  onclick="generatePDFById(${r.id})" title="PDF"><i class="fa-solid fa-file-pdf"></i></button>
