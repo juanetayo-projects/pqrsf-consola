@@ -1277,24 +1277,45 @@ async function loadAdminPerfiles() {
     </div>`;
 }
 
-function adminNewPerfil() {
+async function adminNewPerfil() {
   adminEditingId   = null;
-  adminModalSaveFn = adminSavePerfil;
+  adminModalSaveFn = adminCreateUser;
+
+  // Cargar lista de procesos para el select
+  const { data: procesos } = await db
+    .from('lista_procesos')
+    .select('nombre')
+    .eq('activo', true)
+    .order('orden');
+
+  const procesoOptions = (procesos || [])
+    .map(p => `<option value="${esc(p.nombre)}">${esc(p.nombre)}</option>`)
+    .join('');
+
   document.getElementById('adminModalTitle').innerHTML =
-    '<i class="fa-solid fa-user-plus" style="margin-right:8px;color:#2471c8"></i>Nuevo perfil de usuario';
+    '<i class="fa-solid fa-user-plus" style="margin-right:8px;color:#2471c8"></i>Crear nuevo usuario';
   document.getElementById('adminModalBody').innerHTML = `
     <div class="admin-form-grid">
-      <div class="admin-form-field full">
-        <label>ID de Auth (UUID de Supabase Auth)</label>
-        <input id="ap-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+      <div class="admin-form-field">
+        <label>Nombre completo <span style="color:#dc2626">*</span></label>
+        <input id="ap-nombre" placeholder="Ej. Juan Pérez" autocomplete="off"/>
       </div>
       <div class="admin-form-field">
-        <label>Nombre completo</label>
-        <input id="ap-nombre" placeholder="Ej. Juan Pérez"/>
+        <label>Correo electrónico <span style="color:#dc2626">*</span></label>
+        <input id="ap-email" type="email" placeholder="usuario@cacsantabarbara.co" autocomplete="off"/>
       </div>
       <div class="admin-form-field">
-        <label>Correo electrónico</label>
-        <input id="ap-email" type="email" placeholder="usuario@clinica.com"/>
+        <label>Contraseña temporal <span style="color:#dc2626">*</span></label>
+        <div style="position:relative">
+          <input id="ap-pass" type="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password"
+                 style="padding-right:40px;width:100%;box-sizing:border-box"/>
+          <button type="button" onclick="togglePassVis('ap-pass',this)"
+                  style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+                         background:none;border:none;cursor:pointer;color:#6b7280;font-size:14px;">
+            <i class="fa-solid fa-eye"></i>
+          </button>
+        </div>
+        <small style="color:#6b7280;font-size:11px">El usuario deberá cambiarla en su primer acceso.</small>
       </div>
       <div class="admin-form-field">
         <label>Rol</label>
@@ -1303,26 +1324,94 @@ function adminNewPerfil() {
           <option value="admin">Administrador</option>
         </select>
       </div>
-    </div>`;
+      <div class="admin-form-field full">
+        <label>Proceso / Servicio asignado</label>
+        <select id="ap-proceso">
+          <option value="">— Sin proceso específico —</option>
+          ${procesoOptions}
+        </select>
+      </div>
+    </div>
+    <div id="ap-error" style="display:none;margin-top:12px;padding:10px 14px;background:#fef2f2;
+         border-left:3px solid #dc2626;border-radius:4px;font-size:13px;color:#dc2626"></div>`;
+
   document.getElementById('adminModal').style.display = 'flex';
+  document.getElementById('btnAdminSave').innerHTML =
+    '<i class="fa-solid fa-user-plus"></i> Crear usuario';
+}
+
+function togglePassVis(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const isPass = input.type === 'password';
+  input.type = isPass ? 'text' : 'password';
+  btn.querySelector('i').className = isPass ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+}
+
+async function adminCreateUser() {
+  const nombre  = document.getElementById('ap-nombre')?.value.trim();
+  const email   = document.getElementById('ap-email')?.value.trim();
+  const pass    = document.getElementById('ap-pass')?.value;
+  const rol     = document.getElementById('ap-rol')?.value;
+  const proceso = document.getElementById('ap-proceso')?.value;
+  const errEl   = document.getElementById('ap-error');
+
+  const showErr = (msg) => {
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+  };
+
+  if (!nombre) return showErr('El nombre es obligatorio.');
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return showErr('Ingrese un correo electrónico válido.');
+  if (!pass || pass.length < 8)
+    return showErr('La contraseña debe tener al menos 8 caracteres.');
+
+  errEl.style.display = 'none';
+  showLoading('Creando usuario…');
+
+  const { data, error } = await db.functions.invoke('create-user', {
+    body: { email, password: pass, nombre, rol, proceso },
+  });
+
+  hideLoading();
+
+  if (error || !data?.ok) {
+    showErr(data?.error || error?.message || 'Error al crear el usuario.');
+    return;
+  }
+
+  closeModal('adminModal');
+  loadAdminPerfiles();
+  // Restaurar texto del botón para la próxima apertura
+  document.getElementById('btnAdminSave').innerHTML =
+    '<i class="fa-solid fa-floppy-disk"></i> Guardar';
 }
 
 function adminEditPerfil(id) {
-  const perfil = null; // se carga del panel actual
-  // Buscar datos en la tabla renderizada
   adminEditingId   = id;
   adminModalSaveFn = adminSavePerfil;
 
-  // Re-consultar el registro
-  db.from('consola_perfiles').select('*').eq('id', id).single().then(({ data: u }) => {
+  // Cargar procesos y perfil en paralelo
+  Promise.all([
+    db.from('consola_perfiles').select('*').eq('id', id).single(),
+    db.from('lista_procesos').select('nombre').eq('activo', true).order('orden'),
+  ]).then(([{ data: u }, { data: procesos }]) => {
     if (!u) return;
+    const procesoOptions = [
+      `<option value="">— Sin proceso específico —</option>`,
+      ...(procesos || []).map(p =>
+        `<option value="${esc(p.nombre)}" ${u.proceso === p.nombre ? 'selected' : ''}>${esc(p.nombre)}</option>`
+      ),
+    ].join('');
+
     document.getElementById('adminModalTitle').innerHTML =
       '<i class="fa-solid fa-user-pen" style="margin-right:8px;color:#2471c8"></i>Editar perfil';
     document.getElementById('adminModalBody').innerHTML = `
       <div class="admin-form-grid">
         <div class="admin-form-field full">
           <label>ID</label>
-          <input id="ap-id" value="${esc(u.id)}" readonly style="background:#f3f4f6;color:#6b7280"/>
+          <input id="ap-id" value="${esc(u.id)}" readonly
+                 style="background:#f3f4f6;color:#9ca3af;font-size:11px;font-family:monospace"/>
         </div>
         <div class="admin-form-field">
           <label>Nombre completo</label>
@@ -1339,26 +1428,33 @@ function adminEditPerfil(id) {
             <option value="admin"    ${u.rol === 'admin'    ? 'selected' : ''}>Administrador</option>
           </select>
         </div>
+        <div class="admin-form-field full">
+          <label>Proceso / Servicio asignado</label>
+          <select id="ap-proceso">${procesoOptions}</select>
+        </div>
       </div>`;
+    document.getElementById('btnAdminSave').innerHTML =
+      '<i class="fa-solid fa-floppy-disk"></i> Guardar cambios';
     document.getElementById('adminModal').style.display = 'flex';
   });
 }
 
 async function adminSavePerfil() {
+  // Solo para EDICIÓN de perfiles existentes (el ID ya viene del adminEditingId)
   const apId     = document.getElementById('ap-id')?.value.trim();
   const apNombre = document.getElementById('ap-nombre')?.value.trim();
   const apEmail  = document.getElementById('ap-email')?.value.trim();
   const apRol    = document.getElementById('ap-rol')?.value;
+  const apProceso= document.getElementById('ap-proceso')?.value ?? null;
 
-  if (!apId) { alert('El ID es obligatorio.'); return; }
+  if (!apId) { alert('No se encontró el ID del usuario.'); return; }
 
-  showLoading('Guardando perfil…');
+  showLoading('Guardando cambios…');
 
-  const payload = { id: apId, nombre: apNombre, email: apEmail, rol: apRol };
-
-  const { error } = adminEditingId
-    ? await db.from('consola_perfiles').update({ nombre: apNombre, email: apEmail, rol: apRol }).eq('id', apId)
-    : await db.from('consola_perfiles').upsert(payload, { onConflict: 'id' });
+  const { error } = await db
+    .from('consola_perfiles')
+    .update({ nombre: apNombre, email: apEmail, rol: apRol, proceso: apProceso || null })
+    .eq('id', apId);
 
   hideLoading();
   if (error) { alert('Error: ' + error.message); return; }
