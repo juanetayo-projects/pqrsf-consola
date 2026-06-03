@@ -3,6 +3,61 @@
    Clínica de Alta Complejidad Santa Bárbara
 ================================================================ */
 
+/* ── Semaforización de fallas ───────────────────────────────── */
+const FALLA_SEMAFORO = {
+  '1. Caída del sistema'                                                         : 'verde',
+  '1. Cambio de Profesional'                                                     : 'verde',
+  '1. No entrega de Resultados'                                                  : 'verde',
+  '1. No responde el contact center'                                             : 'verde',
+  '1. Retraso en admisión'                                                       : 'verde',
+  '1. Servicio no contratado'                                                    : 'verde',
+  '1. Servicio no disponible en la sede'                                         : 'verde',
+  '1. Valor elevado en tarifa (cuota moderadora, copago, cotización particular)' : 'amarillo',
+  '2. Administración tardía de medicamentos y/o conductas'                       : 'amarillo',
+  '2. Demora en los trámites de remisión'                                        : 'amarillo',
+  '2. Inoportunidad en la programación de ayudas diagnostica intrahospitalarias' : 'amarillo',
+  '2. No disponibilidad de agenda'                                               : 'verde',
+  '2. No recibió llamada de retorno'                                             : 'verde',
+  '2. Recurso limitado'                                                          : 'amarillo',
+  '2. Reprogramación de cita o turno'                                            : 'verde',
+  '2. Retraso en la atención'                                                    : 'amarillo',
+  '2. Retraso en la entrega de resultados'                                       : 'verde',
+  '2. Retraso en la programación de procedimientos'                              : 'verde',
+  '2. Retraso en la respuesta interconsulta'                                     : 'verde',
+  '3. Daño en infraestructura'                                                   : 'verde',
+  '3. Identificación incorrecta del paciente'                                    : 'amarillo',
+  '3. Limpieza'                                                                  : 'verde',
+  '3. Procedimiento asistencial inapropiado'                                     : 'amarillo',
+  '4. Errores en formulas'                                                       : 'verde',
+  '4. Inconformidad con tratamiento'                                             : 'rojo',
+  '4. Información Errada'                                                        : 'rojo',
+  '4. Retraso en autorización home care'                                         : 'amarillo',
+  '5. Falta de información al paciente para su intervención'                     : 'rojo',
+  '6. Calidad/cantidad en la alimentación'                                       : 'verde',
+  '6. Disposición y flexibilidad de quien le atiende'                            : 'verde',
+  '6. Instalaciones no confortables'                                             : 'amarillo',
+  '6. Ruido'                                                                     : 'amarillo',
+  '6. Trato humanizado'                                                          : 'rojo',
+  '7. Felicitaciones'                                                            : 'verde',
+};
+const SEMAFORO_CFG = {
+  verde   : { bg:'#dcfce7', color:'#15803d', dot:'#16a34a', label:'Verde',    pdf:[220,252,231], pdfTxt:[21,128,61]  },
+  amarillo: { bg:'#fef9c3', color:'#92400e', dot:'#ca8a04', label:'Amarillo', pdf:[254,249,195], pdfTxt:[133,77,14]  },
+  rojo    : { bg:'#fee2e2', color:'#991b1b', dot:'#dc2626', label:'Rojo',     pdf:[254,226,226], pdfTxt:[153,27,27]  },
+};
+
+function fallaColorBadge(falla) {
+  if (!falla) return '—';
+  const nivel = FALLA_SEMAFORO[falla];
+  if (!nivel) return esc(falla);
+  const cfg = SEMAFORO_CFG[nivel];
+  return `<span style="display:inline-flex;align-items:center;gap:5px;background:${cfg.bg};
+    color:${cfg.color};padding:2px 8px 2px 6px;border-radius:99px;font-size:11px;font-weight:600;
+    line-height:1.5;white-space:normal;max-width:100%;word-break:break-word">
+    <span style="width:8px;height:8px;border-radius:50%;background:${cfg.dot};flex-shrink:0;display:inline-block"></span
+    >${esc(falla)}</span>`;
+}
+
 /* ── Estado global ──────────────────────────────────────────── */
 let allRecords   = [];   // todos los registros cargados
 let filteredRecs = [];   // después de filtros
@@ -684,7 +739,7 @@ function buildTableAttachIcons(r) {
 function renderTable(recs) {
   const tbody = document.getElementById('tableBody');
   if (!recs.length) {
-    tbody.innerHTML = '<tr><td colspan="11" class="table-loading">Sin registros para mostrar</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="table-loading">Sin registros para mostrar</td></tr>';
     document.getElementById('tableFooter').textContent = '0 registros';
     return;
   }
@@ -703,6 +758,7 @@ function renderTable(recs) {
       <td>${esc(r.entidad??'—')}</td>
       <td>${esc(r.sede??'—')}</td>
       <td style="font-size:12px">${esc(r.proceso??'—')}</td>
+      <td style="font-size:11px;max-width:180px">${fallaColorBadge(r.falla_atributo)}</td>
       <td style="font-size:12px;white-space:nowrap">${fecha}</td>
       <td><span class="badge-estado-table ${estCls}">${esc(r.estado??'Recibida')}</span></td>
       <td><span class="resp-dot ${hasResp?'yes':'no'}" title="${hasResp?'Respondida':'Sin respuesta'}"></span> ${hasResp?'Sí':'No'}</td>
@@ -824,7 +880,10 @@ function renderViewForm(r, resp) {
       ${df('Teléfono',             r.telefono)}
       ${df('Correo paciente',      r.email_reporta)}
       ${df('Dirección',            r.direccion)}
-      ${df('Falla / Atributo',     r.falla_atributo)}
+      <div class="record-field full">
+        <div class="record-label">Falla / Atributo</div>
+        <div class="record-value">${fallaColorBadge(r.falla_atributo)}</div>
+      </div>
       ${df('Especialidad',         r.especialidad)}
       ${df('Colaborador reporte',  r.colaborador)}
       ${buildAttachCard(r.archivo_url, r.archivo_nombre, '#2471c8')}
@@ -1070,7 +1129,13 @@ function generatePDFById(id) {
       ['Identificación',   r.numero_identificacion??'—'],
       ['Teléfono',         r.telefono??'—'],
       ['Correo',           r.email_reporta??'—'],
-      ['Falla/Atributo',   r.falla_atributo??'—'],
+      (()=>{
+        const nivel = r.falla_atributo ? (FALLA_SEMAFORO[r.falla_atributo] ?? null) : null;
+        const cfg   = nivel ? SEMAFORO_CFG[nivel] : null;
+        return [{content:'Falla/Atributo',styles:{fontStyle:'bold',fillColor:[240,246,255],cellWidth:55}},
+                {content: r.falla_atributo??'—',
+                 styles: cfg ? {fillColor:cfg.pdf, textColor:cfg.pdfTxt, fontStyle:'bold'} : {}}];
+      })(),
       ['Especialidad',     r.especialidad??'—'],
       ['Colaborador',      r.colaborador??'—'],
     ],
@@ -1157,6 +1222,7 @@ function exportExcel() {
       'Teléfono'              : r.telefono ?? '',
       'Correo Paciente'       : r.email_reporta ?? '',
       'Falla/Atributo'        : r.falla_atributo ?? '',
+      'Semáforo'              : (()=>{ const n=FALLA_SEMAFORO[r.falla_atributo]; return n==='verde'?'🟢 Verde':n==='amarillo'?'🟡 Amarillo':n==='rojo'?'🔴 Rojo':''; })(),
       'Especialidad'          : r.especialidad ?? '',
       'Colaborador Reporte'   : r.colaborador ?? '',
       'Descripción'           : r.descripcion ?? '',

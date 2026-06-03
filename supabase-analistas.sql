@@ -4,17 +4,21 @@
 --  Ejecutar en: Supabase → SQL Editor
 --  ⚠ Contraseña temporal asignada: Pqrsf2024*
 --    Cada analista debe cambiarla en su primer acceso.
+--
+--  NOTA: Varios procesos comparten correos separados por coma.
+--        El script divide cada correo y crea/actualiza un usuario
+--        por cada dirección individual.
+--        Si un correo aparece en varios procesos, se asigna el
+--        proceso del último que se procese (orden ascendente).
 -- ================================================================
 
 
 -- ── PASO 1: Columna "proceso" en consola_perfiles ───────────────
--- (No existe en el DDL original; la app ya la referencia)
 ALTER TABLE public.consola_perfiles
   ADD COLUMN IF NOT EXISTS proceso TEXT;
 
 
 -- ── PASO 2: Actualizar trigger handle_new_user ──────────────────
--- Ahora incluye "proceso" desde raw_user_meta_data
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -36,7 +40,6 @@ $$;
 
 
 -- ── PASO 3: Recrear RPC get_my_console_profile ─────────────────
--- Necesario para que retorne la nueva columna "proceso"
 DROP FUNCTION IF EXISTS public.get_my_console_profile();
 
 CREATE OR REPLACE FUNCTION public.get_my_console_profile()
@@ -51,90 +54,103 @@ GRANT EXECUTE ON FUNCTION public.get_my_console_profile() TO authenticated;
 
 
 -- ── PASO 4: Crear usuarios auth + perfiles desde lista_procesos ─
--- Un usuario por cada proceso activo que tenga correo registrado.
--- Si el usuario ya existe, solo actualiza/inserta su perfil.
+-- Itera cada proceso activo con correo, divide correos por coma,
+-- y crea/actualiza un usuario por cada dirección individual.
 DO $$
 DECLARE
-  proc    RECORD;
-  uid     UUID;
+  proc        RECORD;
+  raw_correo  TEXT;
+  correo_item TEXT;
+  correos     TEXT[];
+  uid         UUID;
 BEGIN
   FOR proc IN
     SELECT nombre, correo
     FROM  public.lista_procesos
-    WHERE activo    = true
-      AND correo   IS NOT NULL
-      AND correo   <> ''
+    WHERE activo  = true
+      AND correo IS NOT NULL
+      AND correo <> ''
     ORDER BY orden
   LOOP
 
-    -- ¿Ya existe el usuario en auth.users?
-    SELECT id INTO uid FROM auth.users WHERE email = proc.correo;
+    -- Dividir campo correo por coma y limpiar espacios
+    correos := string_to_array(proc.correo, ',');
 
-    IF uid IS NULL THEN
-      -- ── Crear nuevo usuario ──────────────────────────────────
-      uid := gen_random_uuid();
+    FOREACH raw_correo IN ARRAY correos
+    LOOP
+      correo_item := trim(raw_correo);
+      CONTINUE WHEN correo_item = '';
 
-      INSERT INTO auth.users (
-        instance_id,
-        id,
-        aud,
-        role,
-        email,
-        encrypted_password,
-        email_confirmed_at,
-        raw_app_meta_data,
-        raw_user_meta_data,
-        created_at,
-        updated_at,
-        confirmation_token,
-        email_change,
-        email_change_token_new,
-        recovery_token
-      ) VALUES (
-        '00000000-0000-0000-0000-000000000000',
-        uid,
-        'authenticated',
-        'authenticated',
-        proc.correo,
-        crypt('Pqrsf2024*', gen_salt('bf')),   -- contraseña temporal
-        NOW(),                                   -- email confirmado desde inicio
-        '{"provider":"email","providers":["email"]}',
-        jsonb_build_object(
-          'nombre',  proc.nombre,
-          'rol',     'analista',
-          'proceso', proc.nombre
-        ),
-        NOW(),
-        NOW(),
-        '', '', '', ''
-      );
-      -- El trigger handle_new_user crea consola_perfiles automáticamente
+      -- ¿Ya existe el usuario en auth.users?
+      SELECT id INTO uid FROM auth.users WHERE email = correo_item;
 
-    ELSE
-      -- ── Usuario ya existe: asegurar que su perfil esté correcto ──
-      INSERT INTO public.consola_perfiles (id, nombre, email, rol, proceso)
-      VALUES (uid, proc.nombre, proc.correo, 'analista', proc.nombre)
-      ON CONFLICT (id) DO UPDATE SET
-        proceso = EXCLUDED.proceso,
-        nombre  = COALESCE(NULLIF(EXCLUDED.nombre, ''), consola_perfiles.nombre),
-        rol     = CASE WHEN consola_perfiles.rol = 'admin' THEN 'admin'
-                       ELSE 'analista' END;  -- nunca degradar un admin
+      IF uid IS NULL THEN
+        -- ── Crear nuevo usuario ────────────────────────────────
+        uid := gen_random_uuid();
 
-    END IF;
+        INSERT INTO auth.users (
+          instance_id,
+          id,
+          aud,
+          role,
+          email,
+          encrypted_password,
+          email_confirmed_at,
+          raw_app_meta_data,
+          raw_user_meta_data,
+          created_at,
+          updated_at,
+          confirmation_token,
+          email_change,
+          email_change_token_new,
+          recovery_token
+        ) VALUES (
+          '00000000-0000-0000-0000-000000000000',
+          uid,
+          'authenticated',
+          'authenticated',
+          correo_item,
+          crypt('Pqrsf2024*', gen_salt('bf')),
+          NOW(),
+          '{"provider":"email","providers":["email"]}',
+          jsonb_build_object(
+            'nombre',  split_part(correo_item, '@', 1),
+            'rol',     'analista',
+            'proceso', proc.nombre
+          ),
+          NOW(),
+          NOW(),
+          '', '', '', ''
+        );
+        -- El trigger handle_new_user crea consola_perfiles automáticamente
 
-    RAISE NOTICE 'Procesado: % (%)', proc.nombre, proc.correo;
+      ELSE
+        -- ── Usuario ya existe: asegurar que su perfil esté correcto ──
+        INSERT INTO public.consola_perfiles (id, nombre, email, rol, proceso)
+        VALUES (uid, split_part(correo_item, '@', 1), correo_item, 'analista', proc.nombre)
+        ON CONFLICT (id) DO UPDATE SET
+          proceso = EXCLUDED.proceso,
+          nombre  = COALESCE(NULLIF(EXCLUDED.nombre, ''), consola_perfiles.nombre),
+          rol     = CASE WHEN consola_perfiles.rol = 'admin' THEN 'admin'
+                         ELSE 'analista' END;  -- nunca degradar un admin
+
+      END IF;
+
+      RAISE NOTICE 'Procesado: % → %', proc.nombre, correo_item;
+    END LOOP;
+
   END LOOP;
 END $$;
 
 
 -- ── PASO 5: Verificar resultado ─────────────────────────────────
 SELECT
-  cp.nombre                                                   AS "Nombre",
-  cp.email                                                    AS "Correo",
-  cp.rol                                                      AS "Rol",
-  cp.proceso                                                  AS "Proceso",
-  cp.activo                                                   AS "Activo",
-  (au.email_confirmed_at IS NOT NULL)                         AS "Email confirmado"
+  cp.nombre                                AS "Nombre",
+  cp.email                                 AS "Correo",
+  cp.rol                                   AS "Rol",
+  cp.proceso                               AS "Proceso",
+  cp.activo                                AS "Activo",
+  (au.email_confirmed_at IS NOT NULL)      AS "Email confirmado"
 FROM  public.consola_perfiles cp
 JOIN  auth.users              au ON au.id = cp.id
 ORDER BY cp.rol DESC, cp.proceso;
