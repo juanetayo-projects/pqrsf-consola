@@ -169,6 +169,7 @@ const ESTADO_CLS = {
   'En gestión':'est-gestion',
   'Respondida':'est-respondida',
   'Cerrada'   :'est-cerrada',
+  'Pendiente' :'est-pendiente',
 };
 
 /* ════════════════════════════════════════════════════════════
@@ -1222,7 +1223,7 @@ function exportExcel() {
       'Teléfono'              : r.telefono ?? '',
       'Correo Paciente'       : r.email_reporta ?? '',
       'Falla/Atributo'        : r.falla_atributo ?? '',
-      'Semáforo'              : (()=>{ const n=FALLA_SEMAFORO[r.falla_atributo]; return n==='verde'?'🟢 Verde':n==='amarillo'?'🟡 Amarillo':n==='rojo'?'🔴 Rojo':''; })(),
+      'Semáforo'              : (()=>{ const n=FALLA_SEMAFORO[r.falla_atributo]; return n==='verde'?'Verde':n==='amarillo'?'Amarillo':n==='rojo'?'Rojo':''; })(),
       'Especialidad'          : r.especialidad ?? '',
       'Colaborador Reporte'   : r.colaborador ?? '',
       'Descripción'           : r.descripcion ?? '',
@@ -1239,13 +1240,48 @@ function exportExcel() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'PQRSF');
 
-  // Column widths
+  // Column widths (26 columnas, incluye Semáforo en pos 16)
   ws['!cols'] = [
     {wch:16},{wch:14},{wch:14},{wch:24},{wch:18},{wch:22},{wch:18},
     {wch:14},{wch:16},{wch:22},{wch:12},{wch:26},{wch:14},{wch:14},
-    {wch:26},{wch:22},{wch:16},{wch:22},{wch:50},{wch:12},{wch:16},
-    {wch:22},{wch:60},{wch:22},{wch:16}
+    {wch:26},{wch:40},{wch:12},{wch:22},{wch:22},{wch:50},{wch:12},
+    {wch:16},{wch:22},{wch:60},{wch:22},{wch:16}
   ];
+
+  // ── Estilos xlsx-js-style ────────────────────────────────────
+  const SEMAFORO_XLS = {
+    verde   : { bg:'DCFCE7', font:'15803D' },
+    amarillo: { bg:'FEF9C3', font:'92400E' },
+    rojo    : { bg:'FEE2E2', font:'991B1B' },
+  };
+  const HEADER_STYLE = {
+    font : { bold:true, color:{ rgb:'FFFFFF' } },
+    fill : { patternType:'solid', fgColor:{ rgb:'1A4F9B' } },
+    alignment: { horizontal:'center' },
+  };
+
+  // Cabeceras con fondo azul
+  const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1');
+  for (let C = range.s.c; C <= range.e.c; C++) {
+    const cell = ws[XLSX.utils.encode_cell({ r:0, c:C })];
+    if (cell) cell.s = HEADER_STYLE;
+  }
+
+  // Colores semáforo en columnas Falla/Atributo (P=15) y Semáforo (Q=16)
+  for (let R = 1; R <= range.e.r; R++) {
+    const fallaCell  = ws[XLSX.utils.encode_cell({ r:R, c:15 })];
+    const semCell    = ws[XLSX.utils.encode_cell({ r:R, c:16 })];
+    if (fallaCell?.v) {
+      const nivel = FALLA_SEMAFORO[fallaCell.v];
+      if (nivel) {
+        const xls = SEMAFORO_XLS[nivel];
+        const st  = { fill:{ patternType:'solid', fgColor:{ rgb:xls.bg } },
+                      font:{ color:{ rgb:xls.font }, bold:true } };
+        fallaCell.s = st;
+        if (semCell) semCell.s = st;
+      }
+    }
+  }
 
   const fecha = new Date().toISOString().split('T')[0];
   XLSX.writeFile(wb, `PQRSF_Reporte_${fecha}.xlsx`);
