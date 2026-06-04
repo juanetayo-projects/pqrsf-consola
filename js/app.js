@@ -740,7 +740,7 @@ function buildTableAttachIcons(r) {
 function renderTable(recs) {
   const tbody = document.getElementById('tableBody');
   if (!recs.length) {
-    tbody.innerHTML = '<tr><td colspan="12" class="table-loading">Sin registros para mostrar</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" class="table-loading">Sin registros para mostrar</td></tr>';
     document.getElementById('tableFooter').textContent = '0 registros';
     return;
   }
@@ -760,6 +760,7 @@ function renderTable(recs) {
       <td>${esc(r.sede??'—')}</td>
       <td style="font-size:12px">${esc(r.proceso??'—')}</td>
       <td style="font-size:11px;max-width:180px">${fallaColorBadge(r.falla_atributo)}</td>
+      <td style="font-size:12px;text-align:center">${r.dias_habiles != null ? `<span style="font-weight:700;color:#1a4f9b">${r.dias_habiles}</span> <span style="font-size:10px;color:#6b7280">días</span>` : '—'}</td>
       <td style="font-size:12px;white-space:nowrap">${fecha}</td>
       <td><span class="badge-estado-table ${estCls}">${esc(r.estado??'Recibida')}</span></td>
       <td><span class="resp-dot ${hasResp?'yes':'no'}" title="${hasResp?'Respondida':'Sin respuesta'}"></span> ${hasResp?'Sí':'No'}</td>
@@ -885,6 +886,7 @@ function renderViewForm(r, resp) {
         <div class="record-label">Falla / Atributo</div>
         <div class="record-value">${fallaColorBadge(r.falla_atributo)}</div>
       </div>
+      ${df('Días hábiles para responder', r.dias_habiles != null ? r.dias_habiles + ' días' : null)}
       ${df('Especialidad',         r.especialidad)}
       ${df('Colaborador reporte',  r.colaborador)}
       ${buildAttachCard(r.archivo_url, r.archivo_nombre, '#2471c8')}
@@ -1137,6 +1139,7 @@ function generatePDFById(id) {
                 {content: r.falla_atributo??'—',
                  styles: cfg ? {fillColor:cfg.pdf, textColor:cfg.pdfTxt, fontStyle:'bold'} : {}}];
       })(),
+      ['Días hábiles',     r.dias_habiles != null ? r.dias_habiles + ' días' : '—'],
       ['Especialidad',     r.especialidad??'—'],
       ['Colaborador',      r.colaborador??'—'],
     ],
@@ -1224,6 +1227,7 @@ function exportExcel() {
       'Correo Paciente'       : r.email_reporta ?? '',
       'Falla/Atributo'        : r.falla_atributo ?? '',
       'Semáforo'              : (()=>{ const n=FALLA_SEMAFORO[r.falla_atributo]; return n==='verde'?'Verde':n==='amarillo'?'Amarillo':n==='rojo'?'Rojo':''; })(),
+      'Días Hábiles'          : r.dias_habiles ?? '',
       'Especialidad'          : r.especialidad ?? '',
       'Colaborador Reporte'   : r.colaborador ?? '',
       'Descripción'           : r.descripcion ?? '',
