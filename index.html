@@ -51,6 +51,12 @@
           <button type="submit" class="btn-login" id="btnLogin">
             <i class="fa-solid fa-right-to-bracket"></i> Iniciar sesión
           </button>
+
+          <div class="forgot-link">
+            <button type="button" onclick="openRecoveryModal()">
+              <i class="fa-solid fa-circle-question"></i> ¿Olvidó su contraseña?
+            </button>
+          </div>
         </form>
 
         <div class="login-footer-note">
@@ -59,6 +65,49 @@
           Si no tiene credenciales, contacte al administrador del sistema.
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal recuperación de contraseña -->
+  <div class="recovery-backdrop" id="recoveryBackdrop" onclick="closeRecoveryModal(event)">
+    <div class="recovery-modal" role="dialog" aria-modal="true" aria-labelledby="recoveryTitle">
+
+      <button class="recovery-close" onclick="closeRecoveryModal(true)" aria-label="Cerrar">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="recovery-header">
+        <div class="recovery-icon"><i class="fa-solid fa-envelope-open-text"></i></div>
+        <h3 id="recoveryTitle">Recuperar contraseña</h3>
+        <p>Ingrese su correo institucional y le enviaremos un enlace para restablecer su contraseña.</p>
+      </div>
+
+      <!-- Estado: formulario -->
+      <div id="recoveryForm">
+        <div class="login-field">
+          <label><i class="fa-solid fa-envelope"></i> Correo electrónico</label>
+          <input type="email" id="recoveryEmail"
+                 placeholder="usuario@cacsantabarbara.co"
+                 autocomplete="email"
+                 onkeydown="if(event.key==='Enter') doRecovery()"/>
+        </div>
+        <div class="login-error" id="recoveryError" style="display:none"></div>
+        <button class="btn-login" id="btnRecovery" style="margin-bottom:0" onclick="doRecovery()">
+          <i class="fa-solid fa-paper-plane"></i> Enviar enlace de recuperación
+        </button>
+      </div>
+
+      <!-- Estado: éxito -->
+      <div id="recoverySuccess" style="display:none" class="recovery-success">
+        <i class="fa-solid fa-circle-check"></i>
+        <h4>¡Correo enviado!</h4>
+        <p>Revise su bandeja de entrada y siga el enlace para restablecer su contraseña.<br>
+           <span>Si no lo encuentra, revise la carpeta de spam.</span></p>
+        <button class="btn-login" style="margin:0" onclick="closeRecoveryModal(true)">
+          <i class="fa-solid fa-check"></i> Entendido
+        </button>
+      </div>
+
     </div>
   </div>
 
