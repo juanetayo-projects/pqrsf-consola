@@ -58,7 +58,13 @@ async function doLogout() {
 
 /* ── Auto-check session on login page ──────────────────────── */
 if (document.getElementById('loginForm')) {
-  db.auth.getSession().then(({ data: { session } }) => {
-    if (session) window.location.href = 'console.html';
-  });
+  // Si el enlace de reset de contraseña aterriza aquí, redirigir a reset-password.html
+  const _hash = window.location.hash;
+  if (_hash.includes('type=recovery') || _hash.includes('type=invite')) {
+    window.location.href = 'reset-password.html' + _hash;
+  } else {
+    db.auth.getSession().then(({ data: { session } }) => {
+      if (session) window.location.href = 'console.html';
+    });
+  }
 }
